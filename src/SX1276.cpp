@@ -56,6 +56,7 @@ SX1276::SX1276() {
  * Constructor with pin configuration (RadioLib-compatible)
  */
 SX1276::SX1276(int cs, int irq, int rst, int gpio) {
+    (void)gpio;  // Unused parameter - reserved for future use
     _csPin = cs;
     _rstPin = rst;
     _dio0Pin = irq;  // DIO0 is the primary interrupt pin
@@ -593,6 +594,12 @@ int16_t SX1276::transmit(const uint8_t* data, size_t len) {
         state = standby();
     }
 #endif
+
+#if !defined(LORA_ENABLED) && !defined(FSK_OOK_ENABLED)
+    // Suppress unused parameter warnings when no modulation is enabled
+    (void)data;
+    (void)len;
+#endif
     
     return state;
 }
@@ -744,6 +751,12 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
         
         return len;
     }
+#endif
+
+#if !defined(LORA_ENABLED) && !defined(FSK_OOK_ENABLED)
+    // Suppress unused parameter warnings when no modulation is enabled
+    (void)data;
+    (void)maxLen;
 #endif
     
     return SX1276_ERR_WRONG_MODEM;
