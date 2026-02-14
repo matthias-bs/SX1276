@@ -20,6 +20,7 @@ SX1276::SX1276() {
     _freq = 0;
     _power = 17;
     _useBoost = true;
+    _modulation = SX1276_MODULATION_LORA;  // Default to LoRa
     
 #ifdef LORA_ENABLED
     _bw = SX1276_BW_125_KHZ;
@@ -28,6 +29,18 @@ SX1276::SX1276() {
     _preambleLength = 8;
     _syncWord = 0x12;  // Private network
     _crcEnabled = true;
+#endif
+
+#ifdef FSK_OOK_ENABLED
+    _bitrate = 4800;  // Default 4.8 kbps
+    _freqDev = 5000;  // Default 5 kHz
+    _rxBw = SX1276_RX_BW_10_4_KHZ_FSK;
+    _syncWordFSK[0] = 0x12;
+    _syncWordFSK[1] = 0xAD;
+    _syncWordLen = 2;
+    _preambleLengthFSK = 16;  // 16 bits
+    _fixedLength = false;  // Variable length
+    _crcOnFSK = true;
 #endif
 }
 
@@ -77,6 +90,20 @@ int16_t SX1276::begin(long freq, int cs, int rst, int dio0) {
 }
 
 /**
+ * Set modulation type
+ */
+int16_t SX1276::setModulation(uint8_t modulation) {
+    if (modulation > SX1276_MODULATION_LORA) {
+        return SX1276_ERR_WRONG_MODEM;
+    }
+    
+    _modulation = modulation;
+    
+    // Reconfigure the module with new modulation
+    return config();
+}
+
+/**
  * Shutdown the module
  */
 void SX1276::end() {
@@ -103,86 +130,96 @@ int16_t SX1276::reset() {
 int16_t SX1276::config() {
     int16_t state = SX1276_ERR_NONE;
     
+#if defined(LORA_ENABLED) && defined(FSK_OOK_ENABLED)
+    // Both modes available - check which one is selected
+    if (_modulation == SX1276_MODULATION_LORA) {
+#endif
+
 #ifdef LORA_ENABLED
-    // Set to sleep mode for configuration (LoRa mode)
-    state = sleep();
-    if (state != SX1276_ERR_NONE) {
-        return state;
+        // Set to sleep mode for configuration (LoRa mode)
+        state = sleep();
+        if (state != SX1276_ERR_NONE) {
+            return state;
+        }
+        
+        // Set LoRa mode
+        writeRegister(SX1276_REG_OP_MODE, SX1276_MODE_SLEEP | SX1276_LORA_MODE);
+        delay(10);
+        
+        // Set to standby mode
+        state = standby();
+        if (state != SX1276_ERR_NONE) {
+            return state;
+        }
+        
+        // Set frequency
+        state = setFrequency(_freq);
+        if (state != SX1276_ERR_NONE) {
+            return state;
+        }
+        
+        // Set FIFO base addresses
+        writeRegister(SX1276_REG_FIFO_TX_BASE_ADDR, 0x00);
+        writeRegister(SX1276_REG_FIFO_RX_BASE_ADDR, 0x00);
+        
+        // Set LNA boost
+        writeRegister(SX1276_REG_LNA, readRegister(SX1276_REG_LNA) | 0x03);
+        
+        // Set auto AGC
+        writeRegister(SX1276_REG_MODEM_CONFIG_3, 0x04);
+        
+        // Set output power
+        state = setPower(_power, _useBoost);
+        if (state != SX1276_ERR_NONE) {
+            return state;
+        }
+        
+        // Set OCP to 240mA
+        writeRegister(SX1276_REG_OCP, 0x20 | 0x1B);
+        
+        // Set LoRa parameters
+        state = setBandwidth(_bw);
+        if (state != SX1276_ERR_NONE) {
+            return state;
+        }
+        
+        state = setSpreadingFactor(_sf);
+        if (state != SX1276_ERR_NONE) {
+            return state;
+        }
+        
+        state = setCodingRate(_cr);
+        if (state != SX1276_ERR_NONE) {
+            return state;
+        }
+        
+        state = setPreambleLength(_preambleLength);
+        if (state != SX1276_ERR_NONE) {
+            return state;
+        }
+        
+        state = setSyncWord(_syncWord);
+        if (state != SX1276_ERR_NONE) {
+            return state;
+        }
+        
+        state = setCRC(_crcEnabled);
+        if (state != SX1276_ERR_NONE) {
+            return state;
+        }
+        
+        // Set DIO0 to TxDone/RxDone
+        writeRegister(SX1276_REG_DIO_MAPPING_1, 0x00);
+#endif
+
+#if defined(LORA_ENABLED) && defined(FSK_OOK_ENABLED)
+    } else {
+        // FSK/OOK mode
+        return configFSK();
     }
-    
-    // Set LoRa mode
-    writeRegister(SX1276_REG_OP_MODE, SX1276_MODE_SLEEP | SX1276_LORA_MODE);
-    delay(10);
-    
-    // Set to standby mode
-    state = standby();
-    if (state != SX1276_ERR_NONE) {
-        return state;
-    }
-    
-    // Set frequency
-    state = setFrequency(_freq);
-    if (state != SX1276_ERR_NONE) {
-        return state;
-    }
-    
-    // Set FIFO base addresses
-    writeRegister(SX1276_REG_FIFO_TX_BASE_ADDR, 0x00);
-    writeRegister(SX1276_REG_FIFO_RX_BASE_ADDR, 0x00);
-    
-    // Set LNA boost
-    writeRegister(SX1276_REG_LNA, readRegister(SX1276_REG_LNA) | 0x03);
-    
-    // Set auto AGC
-    writeRegister(SX1276_REG_MODEM_CONFIG_3, 0x04);
-    
-    // Set output power
-    state = setPower(_power, _useBoost);
-    if (state != SX1276_ERR_NONE) {
-        return state;
-    }
-    
-    // Set OCP to 240mA
-    writeRegister(SX1276_REG_OCP, 0x20 | 0x1B);
-    
-    // Set LoRa parameters
-    state = setBandwidth(_bw);
-    if (state != SX1276_ERR_NONE) {
-        return state;
-    }
-    
-    state = setSpreadingFactor(_sf);
-    if (state != SX1276_ERR_NONE) {
-        return state;
-    }
-    
-    state = setCodingRate(_cr);
-    if (state != SX1276_ERR_NONE) {
-        return state;
-    }
-    
-    state = setPreambleLength(_preambleLength);
-    if (state != SX1276_ERR_NONE) {
-        return state;
-    }
-    
-    state = setSyncWord(_syncWord);
-    if (state != SX1276_ERR_NONE) {
-        return state;
-    }
-    
-    state = setCRC(_crcEnabled);
-    if (state != SX1276_ERR_NONE) {
-        return state;
-    }
-    
-    // Set DIO0 to TxDone/RxDone
-    writeRegister(SX1276_REG_DIO_MAPPING_1, 0x00);
-    
-#else
-    // FSK/OOK mode configuration would go here
-    // For now, just set to sleep mode
-    state = sleep();
+#elif defined(FSK_OOK_ENABLED)
+    // Only FSK/OOK mode available
+    return configFSK();
 #endif
     
     return state;
@@ -265,48 +302,87 @@ int16_t SX1276::transmit(const uint8_t* data, size_t len) {
     }
     
 #ifdef LORA_ENABLED
-    // Set DIO0 to TxDone
-    writeRegister(SX1276_REG_DIO_MAPPING_1, 0x40);
-    
-    // Clear IRQ flags
-    writeRegister(SX1276_REG_IRQ_FLAGS, 0xFF);
-    
-    // Set FIFO pointer to TX base
-    writeRegister(SX1276_REG_FIFO_ADDR_PTR, 0x00);
-    
-    // Write data to FIFO
-    spiBegin();
-    spiTransfer(SX1276_REG_FIFO | 0x80);
-    for (size_t i = 0; i < len; i++) {
-        spiTransfer(data[i]);
-    }
-    spiEnd();
-    
-    // Set payload length
-    writeRegister(SX1276_REG_PAYLOAD_LENGTH, len);
-    
-    // Start transmission
-    state = setMode(SX1276_MODE_TX);
-    if (state != SX1276_ERR_NONE) {
-        return state;
-    }
-    
-    // Wait for TX done (with timeout)
-    uint32_t start = millis();
-    while (digitalRead(_dio0Pin) == LOW) {
-        if (millis() - start > 5000) {
-            standby();
-            return SX1276_ERR_TX_TIMEOUT;
+    if (_modulation == SX1276_MODULATION_LORA) {
+        // LoRa mode transmit
+        // Set DIO0 to TxDone
+        writeRegister(SX1276_REG_DIO_MAPPING_1, 0x40);
+        
+        // Clear IRQ flags
+        writeRegister(SX1276_REG_IRQ_FLAGS, 0xFF);
+        
+        // Set FIFO pointer to TX base
+        writeRegister(SX1276_REG_FIFO_ADDR_PTR, 0x00);
+        
+        // Write data to FIFO
+        spiBegin();
+        spiTransfer(SX1276_REG_FIFO | 0x80);
+        for (size_t i = 0; i < len; i++) {
+            spiTransfer(data[i]);
         }
-        yield();
+        spiEnd();
+        
+        // Set payload length
+        writeRegister(SX1276_REG_PAYLOAD_LENGTH, len);
+        
+        // Start transmission
+        state = setMode(SX1276_MODE_TX);
+        if (state != SX1276_ERR_NONE) {
+            return state;
+        }
+        
+        // Wait for TX done (with timeout)
+        uint32_t start = millis();
+        while (digitalRead(_dio0Pin) == LOW) {
+            if (millis() - start > 5000) {
+                standby();
+                return SX1276_ERR_TX_TIMEOUT;
+            }
+            yield();
+        }
+        
+        // Clear IRQ flags
+        writeRegister(SX1276_REG_IRQ_FLAGS, 0xFF);
+        
+        // Set back to standby
+        state = standby();
     }
-    
-    // Clear IRQ flags
-    writeRegister(SX1276_REG_IRQ_FLAGS, 0xFF);
-    
-    // Set back to standby
-    state = standby();
-    
+#endif
+
+#ifdef FSK_OOK_ENABLED
+    if (_modulation == SX1276_MODULATION_FSK || _modulation == SX1276_MODULATION_OOK) {
+        // FSK/OOK mode transmit
+        // Set payload length
+        if (_fixedLength) {
+            writeRegister(SX1276_REG_PAYLOAD_LENGTH_FSK, len);
+        }
+        
+        // Write data to FIFO
+        spiBegin();
+        spiTransfer(SX1276_REG_FIFO | 0x80);
+        for (size_t i = 0; i < len; i++) {
+            spiTransfer(data[i]);
+        }
+        spiEnd();
+        
+        // Start transmission
+        state = setMode(SX1276_MODE_TX);
+        if (state != SX1276_ERR_NONE) {
+            return state;
+        }
+        
+        // Wait for TX done (PacketSent flag in IRQ_FLAGS_2)
+        uint32_t start = millis();
+        while (!(readRegister(SX1276_REG_IRQ_FLAGS_2) & SX1276_IRQ2_PACKET_SENT)) {
+            if (millis() - start > 5000) {
+                standby();
+                return SX1276_ERR_TX_TIMEOUT;
+            }
+            yield();
+        }
+        
+        // Set back to standby
+        state = standby();
+    }
 #endif
     
     return state;
@@ -317,73 +393,141 @@ int16_t SX1276::transmit(const uint8_t* data, size_t len) {
  */
 int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
 #ifdef LORA_ENABLED
-    // Set to standby mode
-    int16_t state = standby();
-    if (state != SX1276_ERR_NONE) {
-        return state;
-    }
-    
-    // Set DIO0 to RxDone
-    writeRegister(SX1276_REG_DIO_MAPPING_1, 0x00);
-    
-    // Clear IRQ flags
-    writeRegister(SX1276_REG_IRQ_FLAGS, 0xFF);
-    
-    // Set FIFO pointer to RX base
-    writeRegister(SX1276_REG_FIFO_ADDR_PTR, 0x00);
-    
-    // Start reception
-    state = setMode(SX1276_MODE_RX_CONTINUOUS);
-    if (state != SX1276_ERR_NONE) {
-        return state;
-    }
-    
-    // Wait for RX done (with timeout)
-    uint32_t start = millis();
-    while (digitalRead(_dio0Pin) == LOW) {
-        if (millis() - start > 10000) {
-            standby();
-            return SX1276_ERR_RX_TIMEOUT;
+    if (_modulation == SX1276_MODULATION_LORA) {
+        // LoRa mode receive
+        // Set to standby mode
+        int16_t state = standby();
+        if (state != SX1276_ERR_NONE) {
+            return state;
         }
-        yield();
-    }
-    
-    // Check for CRC error
-    uint8_t irqFlags = readRegister(SX1276_REG_IRQ_FLAGS);
-    if (irqFlags & SX1276_IRQ_PAYLOAD_CRC_ERROR) {
+        
+        // Set DIO0 to RxDone
+        writeRegister(SX1276_REG_DIO_MAPPING_1, 0x00);
+        
+        // Clear IRQ flags
         writeRegister(SX1276_REG_IRQ_FLAGS, 0xFF);
+        
+        // Set FIFO pointer to RX base
+        writeRegister(SX1276_REG_FIFO_ADDR_PTR, 0x00);
+        
+        // Start reception
+        state = setMode(SX1276_MODE_RX_CONTINUOUS);
+        if (state != SX1276_ERR_NONE) {
+            return state;
+        }
+        
+        // Wait for RX done (with timeout)
+        uint32_t start = millis();
+        while (digitalRead(_dio0Pin) == LOW) {
+            if (millis() - start > 10000) {
+                standby();
+                return SX1276_ERR_RX_TIMEOUT;
+            }
+            yield();
+        }
+        
+        // Check for CRC error
+        uint8_t irqFlags = readRegister(SX1276_REG_IRQ_FLAGS);
+        if (irqFlags & SX1276_IRQ_PAYLOAD_CRC_ERROR) {
+            writeRegister(SX1276_REG_IRQ_FLAGS, 0xFF);
+            standby();
+            return SX1276_ERR_CRC_MISMATCH;
+        }
+        
+        // Get packet length
+        uint8_t len = readRegister(SX1276_REG_RX_NB_BYTES);
+        if (len > maxLen) {
+            len = maxLen;
+        }
+        
+        // Set FIFO pointer to last packet
+        uint8_t fifoAddr = readRegister(SX1276_REG_FIFO_RX_CURRENT_ADDR);
+        writeRegister(SX1276_REG_FIFO_ADDR_PTR, fifoAddr);
+        
+        // Read data from FIFO
+        spiBegin();
+        spiTransfer(SX1276_REG_FIFO);
+        for (size_t i = 0; i < len; i++) {
+            data[i] = spiTransfer(0x00);
+        }
+        spiEnd();
+        
+        // Clear IRQ flags
+        writeRegister(SX1276_REG_IRQ_FLAGS, 0xFF);
+        
+        // Set back to standby
         standby();
-        return SX1276_ERR_CRC_MISMATCH;
+        
+        return len;
     }
-    
-    // Get packet length
-    uint8_t len = readRegister(SX1276_REG_RX_NB_BYTES);
-    if (len > maxLen) {
-        len = maxLen;
-    }
-    
-    // Set FIFO pointer to last packet
-    uint8_t fifoAddr = readRegister(SX1276_REG_FIFO_RX_CURRENT_ADDR);
-    writeRegister(SX1276_REG_FIFO_ADDR_PTR, fifoAddr);
-    
-    // Read data from FIFO
-    spiBegin();
-    spiTransfer(SX1276_REG_FIFO);
-    for (size_t i = 0; i < len; i++) {
-        data[i] = spiTransfer(0x00);
-    }
-    spiEnd();
-    
-    // Clear IRQ flags
-    writeRegister(SX1276_REG_IRQ_FLAGS, 0xFF);
-    
-    // Set back to standby
-    standby();
-    
-    return len;
-#else
-    return SX1276_ERR_NONE;
 #endif
+
+#ifdef FSK_OOK_ENABLED
+    if (_modulation == SX1276_MODULATION_FSK || _modulation == SX1276_MODULATION_OOK) {
+        // FSK/OOK mode receive
+        // Set to standby mode
+        int16_t state = standby();
+        if (state != SX1276_ERR_NONE) {
+            return state;
+        }
+        
+        // Start reception
+        state = setMode(SX1276_MODE_RX_CONTINUOUS);
+        if (state != SX1276_ERR_NONE) {
+            return state;
+        }
+        
+        // Wait for PayloadReady flag (with timeout)
+        uint32_t start = millis();
+        while (!(readRegister(SX1276_REG_IRQ_FLAGS_2) & SX1276_IRQ2_PAYLOAD_READY)) {
+            if (millis() - start > 10000) {
+                standby();
+                return SX1276_ERR_RX_TIMEOUT;
+            }
+            yield();
+        }
+        
+        // Check for CRC error (if enabled)
+        if (_crcOnFSK) {
+            uint8_t irqFlags2 = readRegister(SX1276_REG_IRQ_FLAGS_2);
+            if (!(irqFlags2 & SX1276_IRQ2_CRC_OK)) {
+                standby();
+                return SX1276_ERR_CRC_MISMATCH;
+            }
+        }
+        
+        // Get packet length
+        uint8_t len;
+        if (_fixedLength) {
+            len = readRegister(SX1276_REG_PAYLOAD_LENGTH_FSK);
+        } else {
+            // For variable length, first byte in FIFO is length
+            spiBegin();
+            spiTransfer(SX1276_REG_FIFO);
+            len = spiTransfer(0x00);
+            spiEnd();
+        }
+        
+        if (len > maxLen) {
+            len = maxLen;
+        }
+        
+        // Read data from FIFO
+        spiBegin();
+        spiTransfer(SX1276_REG_FIFO);
+        for (size_t i = 0; i < len; i++) {
+            data[i] = spiTransfer(0x00);
+        }
+        spiEnd();
+        
+        // Set back to standby
+        standby();
+        
+        return len;
+    }
+#endif
+    
+    return SX1276_ERR_WRONG_MODEM;
 }
 
 #ifdef LORA_ENABLED
@@ -582,8 +726,17 @@ int16_t SX1276::standby() {
  * Set module to sleep mode
  */
 int16_t SX1276::sleep() {
-#ifdef LORA_ENABLED
+#if defined(LORA_ENABLED) && defined(FSK_OOK_ENABLED)
+    // Both modes available - check which one
+    if (_modulation == SX1276_MODULATION_LORA) {
+        return setMode(SX1276_MODE_SLEEP | SX1276_LORA_MODE);
+    } else {
+        return setMode(SX1276_MODE_SLEEP | SX1276_FSK_OOK_MODE);
+    }
+#elif defined(LORA_ENABLED)
     return setMode(SX1276_MODE_SLEEP | SX1276_LORA_MODE);
+#elif defined(FSK_OOK_ENABLED)
+    return setMode(SX1276_MODE_SLEEP | SX1276_FSK_OOK_MODE);
 #else
     return setMode(SX1276_MODE_SLEEP);
 #endif
@@ -605,6 +758,238 @@ void SX1276::waitForModeReady() {
     // Small delay for mode switching
     delay(2);
 }
+
+#ifdef FSK_OOK_ENABLED
+/**
+ * Configure FSK/OOK mode
+ */
+int16_t SX1276::configFSK() {
+    int16_t state = SX1276_ERR_NONE;
+    
+    // Set to sleep mode for configuration
+    writeRegister(SX1276_REG_OP_MODE, SX1276_MODE_SLEEP | SX1276_FSK_OOK_MODE);
+    delay(10);
+    
+    // Set modulation type (FSK or OOK)
+    uint8_t opMode = readRegister(SX1276_REG_OP_MODE);
+    if (_modulation == SX1276_MODULATION_OOK) {
+        opMode |= 0x20;  // Set OOK bit
+    } else {
+        opMode &= ~0x20;  // Clear OOK bit for FSK
+    }
+    writeRegister(SX1276_REG_OP_MODE, opMode);
+    
+    // Set to standby mode
+    state = standby();
+    if (state != SX1276_ERR_NONE) {
+        return state;
+    }
+    
+    // Set frequency
+    state = setFrequency(_freq);
+    if (state != SX1276_ERR_NONE) {
+        return state;
+    }
+    
+    // Set bitrate
+    state = setBitrate(_bitrate);
+    if (state != SX1276_ERR_NONE) {
+        return state;
+    }
+    
+    // Set frequency deviation (FSK only)
+    if (_modulation == SX1276_MODULATION_FSK) {
+        state = setFrequencyDeviation(_freqDev);
+        if (state != SX1276_ERR_NONE) {
+            return state;
+        }
+    }
+    
+    // Set RX bandwidth
+    state = setRxBandwidth(_rxBw);
+    if (state != SX1276_ERR_NONE) {
+        return state;
+    }
+    
+    // Set AFC bandwidth (same as RX bandwidth)
+    writeRegister(SX1276_REG_AFC_BW, _rxBw);
+    
+    // Set output power
+    state = setPower(_power, _useBoost);
+    if (state != SX1276_ERR_NONE) {
+        return state;
+    }
+    
+    // Set OCP to 120mA (safer for FSK/OOK)
+    writeRegister(SX1276_REG_OCP, 0x20 | 0x0F);
+    
+    // Set preamble detector (3 bytes minimum)
+    writeRegister(SX1276_REG_PREAMBLE_DETECT, 0xAA);
+    
+    // Set preamble length
+    state = setPreambleLength(_preambleLengthFSK);
+    if (state != SX1276_ERR_NONE) {
+        return state;
+    }
+    
+    // Set sync word
+    state = setSyncWord(_syncWordFSK, _syncWordLen);
+    if (state != SX1276_ERR_NONE) {
+        return state;
+    }
+    
+    // Set packet configuration
+    state = setPacketConfig(_fixedLength, _crcOnFSK);
+    if (state != SX1276_ERR_NONE) {
+        return state;
+    }
+    
+    // Set payload length (max for variable length mode)
+    writeRegister(SX1276_REG_PAYLOAD_LENGTH_FSK, SX1276_MAX_PACKET_LENGTH);
+    
+    // Set FIFO threshold (half FIFO)
+    writeRegister(SX1276_REG_FIFO_THRESH, 0x80 | 0x20);
+    
+    // Enable sequence mode
+    writeRegister(SX1276_REG_SEQ_CONFIG_1, 0x40);
+    
+    // Set DIO0 to PacketSent/PayloadReady
+    writeRegister(SX1276_REG_DIO_MAPPING_1, 0x00);
+    
+    return state;
+}
+
+/**
+ * Set FSK/OOK bit rate
+ */
+int16_t SX1276::setBitrate(uint32_t bitrate) {
+    // Validate bitrate (1200 - 300000 bps)
+    if (bitrate < 1200 || bitrate > 300000) {
+        return SX1276_ERR_INVALID_BITRATE;
+    }
+    
+    _bitrate = bitrate;
+    
+    // Calculate bitrate register value
+    // Bitrate = FXOSC / BitrateReg
+    uint32_t bitrateReg = SX1276_FXOSC / bitrate;
+    
+    writeRegister(SX1276_REG_BITRATE_MSB, (bitrateReg >> 8) & 0xFF);
+    writeRegister(SX1276_REG_BITRATE_LSB, bitrateReg & 0xFF);
+    
+    return SX1276_ERR_NONE;
+}
+
+/**
+ * Set FSK frequency deviation
+ */
+int16_t SX1276::setFrequencyDeviation(uint32_t freqDev) {
+    // Validate frequency deviation (600 Hz - 200 kHz)
+    if (freqDev < 600 || freqDev > 200000) {
+        return SX1276_ERR_INVALID_FREQUENCY_DEVIATION;
+    }
+    
+    _freqDev = freqDev;
+    
+    // Calculate frequency deviation register value
+    // Fdev = FSTEP × FreqDevReg
+    uint32_t fdevReg = ((uint64_t)freqDev << 19) / SX1276_FXOSC;
+    
+    writeRegister(SX1276_REG_FDEV_MSB, (fdevReg >> 8) & 0x3F);
+    writeRegister(SX1276_REG_FDEV_LSB, fdevReg & 0xFF);
+    
+    return SX1276_ERR_NONE;
+}
+
+/**
+ * Set FSK/OOK RX bandwidth
+ */
+int16_t SX1276::setRxBandwidth(uint8_t rxBw) {
+    _rxBw = rxBw;
+    writeRegister(SX1276_REG_RX_BW, rxBw);
+    return SX1276_ERR_NONE;
+}
+
+/**
+ * Set FSK/OOK sync word
+ */
+int16_t SX1276::setSyncWord(const uint8_t* syncWord, uint8_t len) {
+    // Validate sync word length (1-8 bytes)
+    if (len < 1 || len > 8) {
+        return SX1276_ERR_INVALID_SYNC_WORD;
+    }
+    
+    _syncWordLen = len;
+    for (uint8_t i = 0; i < len; i++) {
+        _syncWordFSK[i] = syncWord[i];
+    }
+    
+    // Configure sync word
+    // Bit 7: Sync On
+    // Bits 5-3: FIFO fill condition
+    // Bits 2-0: Sync word size - 1
+    writeRegister(SX1276_REG_SYNC_CONFIG, 0x90 | ((len - 1) & 0x07));
+    
+    // Write sync word bytes
+    for (uint8_t i = 0; i < len; i++) {
+        writeRegister(SX1276_REG_SYNC_VALUE_1 + i, syncWord[i]);
+    }
+    
+    return SX1276_ERR_NONE;
+}
+
+/**
+ * Set FSK/OOK preamble length
+ */
+int16_t SX1276::setPreambleLength(uint16_t preambleLen) {
+    _preambleLengthFSK = preambleLen;
+    
+    writeRegister(SX1276_REG_PREAMBLE_MSB_FSK, (preambleLen >> 8) & 0xFF);
+    writeRegister(SX1276_REG_PREAMBLE_LSB_FSK, preambleLen & 0xFF);
+    
+    return SX1276_ERR_NONE;
+}
+
+/**
+ * Set FSK/OOK packet configuration
+ */
+int16_t SX1276::setPacketConfig(bool fixedLength, bool crcOn) {
+    _fixedLength = fixedLength;
+    _crcOnFSK = crcOn;
+    
+    // PacketConfig1
+    // Bit 7: Fixed (1) or Variable (0) length
+    // Bit 6-5: DC-free encoding (00 = none)
+    // Bit 4: CRC on (1) or off (0)
+    // Bit 3: CRC auto clear off
+    // Bit 2-0: Address filtering (000 = off)
+    uint8_t config1 = 0x00;
+    if (fixedLength) {
+        config1 |= 0x80;
+    }
+    if (crcOn) {
+        config1 |= 0x10;
+    }
+    writeRegister(SX1276_REG_PACKET_CONFIG_1, config1);
+    
+    // PacketConfig2
+    // Bit 6: Data mode (1 = packet)
+    // Bits 5-3: I/O home control
+    // Bit 2: Beacon on (0)
+    // Bits 1-0: Payload length MSB
+    writeRegister(SX1276_REG_PACKET_CONFIG_2, 0x40);
+    
+    return SX1276_ERR_NONE;
+}
+
+/**
+ * Get RSSI in FSK/OOK mode
+ */
+int16_t SX1276::getRSSI_FSK() {
+    uint8_t rawRSSI = readRegister(SX1276_REG_RSSI_VALUE_FSK);
+    return -(rawRSSI / 2);  // RSSI in dBm
+}
+#endif
 
 /**
  * Read a register
