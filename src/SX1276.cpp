@@ -20,7 +20,15 @@ SX1276::SX1276() {
     _freq = 0;
     _power = 17;
     _useBoost = true;
-    _modulation = SX1276_MODULATION_LORA;  // Default to LoRa
+    
+    // Set default modulation based on what's compiled in
+#if defined(LORA_ENABLED)
+    _modulation = SX1276_MODULATION_LORA;
+#elif defined(FSK_OOK_ENABLED)
+    _modulation = SX1276_MODULATION_FSK;
+#else
+    _modulation = SX1276_MODULATION_LORA;  // Fallback
+#endif
     
 #ifdef LORA_ENABLED
     _bw = SX1276_BW_125_KHZ;
@@ -351,14 +359,19 @@ int16_t SX1276::transmit(const uint8_t* data, size_t len) {
 #ifdef FSK_OOK_ENABLED
     if (_modulation == SX1276_MODULATION_FSK || _modulation == SX1276_MODULATION_OOK) {
         // FSK/OOK mode transmit
-        // Set payload length
-        if (_fixedLength) {
-            writeRegister(SX1276_REG_PAYLOAD_LENGTH_FSK, len);
-        }
+        // Set payload length register (used for both fixed and variable modes)
+        writeRegister(SX1276_REG_PAYLOAD_LENGTH_FSK, len);
         
         // Write data to FIFO
         spiBegin();
         spiTransfer(SX1276_REG_FIFO | 0x80);
+        
+        // For variable length mode, write length byte first
+        if (!_fixedLength) {
+            spiTransfer(len);
+        }
+        
+        // Write payload data
         for (size_t i = 0; i < len; i++) {
             spiTransfer(data[i]);
         }
@@ -496,29 +509,39 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
             }
         }
         
-        // Get packet length
+        // Get packet length and read data
         uint8_t len;
         if (_fixedLength) {
+            // Fixed length mode - length is from register
             len = readRegister(SX1276_REG_PAYLOAD_LENGTH_FSK);
-        } else {
-            // For variable length, first byte in FIFO is length
+            if (len > maxLen) {
+                len = maxLen;
+            }
+            
+            // Read data from FIFO
             spiBegin();
             spiTransfer(SX1276_REG_FIFO);
-            len = spiTransfer(0x00);
+            for (size_t i = 0; i < len; i++) {
+                data[i] = spiTransfer(0x00);
+            }
+            spiEnd();
+        } else {
+            // Variable length mode - first byte in FIFO is length
+            // Read length and data in one transaction
+            spiBegin();
+            spiTransfer(SX1276_REG_FIFO);
+            len = spiTransfer(0x00);  // First byte is length
+            
+            if (len > maxLen) {
+                len = maxLen;
+            }
+            
+            // Read payload data
+            for (size_t i = 0; i < len; i++) {
+                data[i] = spiTransfer(0x00);
+            }
             spiEnd();
         }
-        
-        if (len > maxLen) {
-            len = maxLen;
-        }
-        
-        // Read data from FIFO
-        spiBegin();
-        spiTransfer(SX1276_REG_FIFO);
-        for (size_t i = 0; i < len; i++) {
-            data[i] = spiTransfer(0x00);
-        }
-        spiEnd();
         
         // Set back to standby
         standby();
