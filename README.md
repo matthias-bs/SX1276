@@ -1,6 +1,6 @@
 # SX1276
 
-Small SX1276 LoRa library for Arduino, optimized for memory-constrained devices.
+Small SX1276 library for Arduino supporting LoRa, FSK, and OOK modulations, optimized for memory-constrained devices.
 
 ## Description
 
@@ -11,9 +11,10 @@ This is a simplified port of [RadioLib](https://github.com/jgromes/RadioLib)'s S
 - **Memory Efficient**: Optimized for AVR ATmega32u4 with limited RAM
 - **No Dynamic Allocation**: All memory is statically allocated
 - **Flat Class Hierarchy**: No inheritance for reduced overhead
-- **Optional LoRa Support**: Enable with `#define LORA_ENABLED`
+- **Multiple Modulations**: Support for LoRa, FSK, and OOK
+- **Optional Modes**: Enable LoRa with `#define LORA_ENABLED` and/or FSK/OOK with `#define FSK_OOK_ENABLED`
 - **Multi-Architecture**: Compatible with AVR, ESP32, ESP8266, and RP2040
-- **Simple API**: Easy-to-use interface for basic LoRa operations
+- **Simple API**: Easy-to-use interface for all modulation types
 - **Debug Support**: Optional debug output with `#define SX1276_DEBUG`
 
 ## Installation
@@ -80,7 +81,77 @@ void loop() {
 }
 ```
 
-See the [BasicExample](examples/BasicExample/BasicExample.ino) for a complete example.
+See the [BasicExample](examples/BasicExample/BasicExample.ino) for a complete LoRa example.
+
+### FSK Example
+
+```cpp
+#define FSK_OOK_ENABLED  // Enable FSK/OOK modulation
+#include <SX1276.h>
+
+SX1276 radio;
+
+void setup() {
+    Serial.begin(115200);
+    
+    // Initialize radio at 915 MHz
+    radio.begin(915000000L, 8, 4, 7);
+    
+    // Set modulation to FSK
+    radio.setModulation(SX1276_MODULATION_FSK);
+    
+    // Configure FSK parameters
+    radio.setBitrate(4800);                          // 4.8 kbps
+    radio.setFrequencyDeviation(5000);               // 5 kHz
+    radio.setRxBandwidth(SX1276_RX_BW_10_4_KHZ_FSK);
+    
+    uint8_t syncWord[] = {0x2D, 0xD4};
+    radio.setSyncWord(syncWord, 2);
+}
+
+void loop() {
+    const char* message = "Hello FSK!";
+    radio.transmit((uint8_t*)message, strlen(message));
+    delay(5000);
+}
+```
+
+See the [FSKExample](examples/FSKExample/FSKExample.ino) for a complete FSK example.
+
+### OOK Example
+
+```cpp
+#define FSK_OOK_ENABLED  // Enable FSK/OOK modulation
+#include <SX1276.h>
+
+SX1276 radio;
+
+void setup() {
+    Serial.begin(115200);
+    
+    // Initialize radio at 433 MHz
+    radio.begin(433000000L, 8, 4, 7);
+    
+    // Set modulation to OOK
+    radio.setModulation(SX1276_MODULATION_OOK);
+    
+    // Configure OOK parameters
+    radio.setBitrate(4800);                          // 4.8 kbps
+    radio.setFrequencyDeviation(0);                  // 0 Hz (OOK)
+    radio.setRxBandwidth(SX1276_RX_BW_10_4_KHZ_FSK);
+    
+    uint8_t syncWord[] = {0x69, 0x81};
+    radio.setSyncWord(syncWord, 2);
+}
+
+void loop() {
+    const char* message = "Hello OOK!";
+    radio.transmit((uint8_t*)message, strlen(message));
+    delay(5000);
+}
+```
+
+See the [OOKExample](examples/OOKExample/OOKExample.ino) for a complete OOK example.
 
 ## API Reference
 
@@ -95,6 +166,14 @@ Initialize the radio module.
 - `cs`: Chip select pin
 - `rst`: Reset pin
 - `dio0`: DIO0 interrupt pin
+- Returns: `SX1276_ERR_NONE` on success, error code otherwise
+
+```cpp
+int16_t setModulation(uint8_t modulation);
+```
+
+Set modulation type.
+- `modulation`: `SX1276_MODULATION_LORA`, `SX1276_MODULATION_FSK`, or `SX1276_MODULATION_OOK`
 - Returns: `SX1276_ERR_NONE` on success, error code otherwise
 
 ### Transmission and Reception
@@ -126,12 +205,31 @@ int16_t setSyncWord(uint8_t sw);           // 0x12 private, 0x34 LoRaWAN
 int16_t setCRC(bool enable);               // Enable/disable CRC
 ```
 
+### Configuration (FSK/OOK Mode)
+
+When `FSK_OOK_ENABLED` is defined:
+
+```cpp
+int16_t setBitrate(uint32_t bitrate);                      // 1200-300000 bps
+int16_t setFrequencyDeviation(uint32_t freqDev);           // 600-200000 Hz (0 for OOK)
+int16_t setRxBandwidth(uint8_t rxBw);                      // Use SX1276_RX_BW_* constants
+int16_t setSyncWord(const uint8_t* syncWord, uint8_t len); // 1-8 bytes
+int16_t setPreambleLength(uint16_t len);                   // In bits
+int16_t setPacketConfig(bool fixedLength, bool crcOn);     // Packet format
+```
+
 ### Signal Quality
 
+LoRa mode:
 ```cpp
 int16_t getRSSI();              // Get RSSI in dBm
 int8_t getSNR();                // Get SNR (divide by 4 for actual dB)
 int32_t getFrequencyError();    // Get frequency error in Hz
+```
+
+FSK/OOK mode:
+```cpp
+int16_t getRSSI_FSK();          // Get RSSI in dBm
 ```
 
 ### Power Management
@@ -141,6 +239,16 @@ int16_t setPower(int8_t power, bool useBoost);  // Set TX power
 int16_t standby();              // Enter standby mode
 int16_t sleep();                // Enter sleep mode
 ```
+
+## Modulation Types
+
+The library supports three modulation types:
+
+- **LoRa**: Long Range, requires `LORA_ENABLED` define
+- **FSK**: Frequency Shift Keying, requires `FSK_OOK_ENABLED` define
+- **OOK**: On-Off Keying, requires `FSK_OOK_ENABLED` define
+
+You can enable both LoRa and FSK/OOK in the same project and switch between them using `setModulation()`.
 
 ## Pin Configuration
 
@@ -164,9 +272,12 @@ Configure pins according to your hardware setup. The library uses the default SP
 This library is specifically designed for memory-constrained devices:
 
 - **No `malloc` or `new`**: All allocations are static
-- **Minimal RAM usage**: ~50 bytes of instance data
-- **No floating point**: All calculations use integers
-- **Compile-time options**: Disable unused features with `#undef LORA_ENABLED`
+- **Minimal RAM usage**: ~50-100 bytes of instance data (depending on enabled modes)
+- **No floating point**: All calculations use integers (except one unused constant)
+- **Compile-time options**: Enable only the modes you need
+  - Define `LORA_ENABLED` to enable LoRa modulation
+  - Define `FSK_OOK_ENABLED` to enable FSK/OOK modulation
+  - Define both to enable all modes with runtime switching
 - **Debug macros**: Debug output compiled out when not needed
 
 ## Compatibility
