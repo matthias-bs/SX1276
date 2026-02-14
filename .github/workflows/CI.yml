@@ -104,7 +104,7 @@ jobs:
           |
           arduino-cli core update-index ${{ format('{0}', steps.prep.outputs.index-url) }}
           # Install base core if needed (e.g., arduino:avr for Adafruit boards)
-          if [ ! -z "${{ steps.prep.outputs.install-base-core }}" ]; then
+          if [ -n "${{ steps.prep.outputs.install-base-core }}" ]; then
             arduino-cli core install ${{ steps.prep.outputs.install-base-core }}
           fi
           arduino-cli core install ${{ format('{0}:{1} {2}', steps.split.outputs._0, steps.split.outputs._1, steps.prep.outputs.index-url) }}
