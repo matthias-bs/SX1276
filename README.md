@@ -6,6 +6,8 @@ Small SX1276 library for Arduino supporting LoRa, FSK, and OOK modulations, opti
 
 This is a simplified port of [RadioLib](https://github.com/jgromes/RadioLib)'s SX1276 implementation, specifically optimized for the Adafruit Feather 32u4 with RFM95 LoRa Radio, while maintaining compatibility with other Arduino architectures.
 
+**📖 Migrating from RadioLib?** See the [RadioLib Compatibility Guide](docs/RADIOLIB_COMPATIBILITY.md) for detailed migration instructions.
+
 ### Features
 
 - **Memory Efficient**: Optimized for AVR ATmega32u4 with limited RAM
@@ -13,6 +15,7 @@ This is a simplified port of [RadioLib](https://github.com/jgromes/RadioLib)'s S
 - **Flat Class Hierarchy**: No inheritance for reduced overhead
 - **Multiple Modulations**: Support for LoRa, FSK, and OOK
 - **Optional Modes**: Enable LoRa with `#define LORA_ENABLED` and/or FSK/OOK with `#define FSK_OOK_ENABLED`
+- **RadioLib-Compatible API**: Provides RadioLib-compatible methods for easy migration
 - **Multi-Architecture**: Compatible with AVR, ESP32, ESP8266, and RP2040
 - **Simple API**: Easy-to-use interface for all modulation types
 - **Debug Support**: Optional debug output with `#define SX1276_DEBUG`
@@ -36,7 +39,73 @@ lib_deps =
 
 ## Usage
 
-### Basic Example
+This library provides **two API styles** to suit different needs:
+
+### 1. Simplified API (Recommended for New Projects)
+
+Direct and memory-efficient - pins specified in `begin()`:
+
+```cpp
+#define LORA_ENABLED  // Enable LoRa modulation
+#include <SX1276.h>
+
+SX1276 radio;
+
+void setup() {
+    Serial.begin(115200);
+    
+    // Initialize: freq in Hz, then pins
+    int16_t state = radio.begin(915000000L, 8, 4, 7);  // freq, cs, rst, dio0
+    
+    if (state == SX1276_ERR_NONE) {
+        Serial.println("Radio initialized!");
+    }
+    
+    // Configure parameters
+    radio.setSpreadingFactor(SX1276_SF_7);
+    radio.setBandwidth(SX1276_BW_125_KHZ);
+}
+
+void loop() {
+    const char* message = "Hello LoRa!";
+    radio.transmit((uint8_t*)message, strlen(message));
+    delay(5000);
+}
+```
+
+### 2. RadioLib-Compatible API (For Migration)
+
+Familiar to RadioLib users - pins in constructor, frequency in MHz:
+
+```cpp
+#define LORA_ENABLED
+#include <SX1276.h>
+
+SX1276 radio(8, 7, 4);  // cs, irq, rst (like RadioLib's Module)
+
+void setup() {
+    Serial.begin(115200);
+    
+    // RadioLib-style begin with MHz and optional parameters
+    int16_t state = radio.begin(915.0);  // Frequency in MHz
+    // Or with full parameters:
+    // state = radio.begin(915.0, 125.0, 9, 7, 0x12, 10, 8, 0);
+    
+    if (state == SX1276_ERR_NONE) {
+        Serial.println("Radio initialized!");
+    }
+}
+
+void loop() {
+    const char* message = "Hello LoRa!";
+    radio.transmit((uint8_t*)message, strlen(message));
+    delay(5000);
+}
+```
+
+See the [BasicExample](examples/BasicExample/BasicExample.ino) for simplified API or [RadioLibCompatible](examples/RadioLibCompatible/RadioLibCompatible.ino) for RadioLib-compatible API.
+
+### Complete Example (Simplified API)
 
 ```cpp
 #define LORA_ENABLED  // Enable LoRa modulation
