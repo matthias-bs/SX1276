@@ -398,8 +398,8 @@ public:
     int16_t setCodingRate(uint8_t cr);
     
     /**
-     * Set preamble length
-     * @param len Preamble length in symbols
+     * Set preamble length (works for both LoRa and FSK/OOK modes)
+     * @param len Preamble length in symbols (LoRa) or bytes (FSK/OOK)
      * @return Error code (SX1276_ERR_NONE on success)
      */
     int16_t setPreambleLength(uint16_t len);
@@ -466,13 +466,6 @@ public:
      * @return Error code (SX1276_ERR_NONE on success)
      */
     int16_t setSyncWord(const uint8_t* syncWord, uint8_t len);
-    
-    /**
-     * Set FSK/OOK preamble length
-     * @param preambleLen Preamble length in bytes
-     * @return Error code (SX1276_ERR_NONE on success)
-     */
-    int16_t setPreambleLength(uint16_t preambleLen);
     
     /**
      * Set packet format

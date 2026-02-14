@@ -839,15 +839,32 @@ int16_t SX1276::setCodingRate(uint8_t cr) {
 }
 
 /**
- * Set preamble length
+ * Set preamble length (works for both LoRa and FSK/OOK modes)
  */
 int16_t SX1276::setPreambleLength(uint16_t len) {
-    _preambleLength = len;
-    
-    writeRegister(SX1276_REG_PREAMBLE_MSB, (len >> 8) & 0xFF);
-    writeRegister(SX1276_REG_PREAMBLE_LSB, len & 0xFF);
-    
-    return SX1276_ERR_NONE;
+#ifdef LORA_ENABLED
+    if (_modulation == SX1276_MODULATION_LORA) {
+        _preambleLength = len;
+        
+        writeRegister(SX1276_REG_PREAMBLE_MSB, (len >> 8) & 0xFF);
+        writeRegister(SX1276_REG_PREAMBLE_LSB, len & 0xFF);
+        
+        return SX1276_ERR_NONE;
+    }
+#endif
+
+#ifdef FSK_OOK_ENABLED
+    if (_modulation == SX1276_MODULATION_FSK || _modulation == SX1276_MODULATION_OOK) {
+        _preambleLengthFSK = len;
+        
+        writeRegister(SX1276_REG_PREAMBLE_MSB_FSK, (len >> 8) & 0xFF);
+        writeRegister(SX1276_REG_PREAMBLE_LSB_FSK, len & 0xFF);
+        
+        return SX1276_ERR_NONE;
+    }
+#endif
+
+    return SX1276_ERR_WRONG_MODEM;
 }
 
 /**
@@ -1166,18 +1183,6 @@ int16_t SX1276::setSyncWord(const uint8_t* syncWord, uint8_t len) {
     for (uint8_t i = 0; i < len; i++) {
         writeRegister(SX1276_REG_SYNC_VALUE_1 + i, syncWord[i]);
     }
-    
-    return SX1276_ERR_NONE;
-}
-
-/**
- * Set FSK/OOK preamble length
- */
-int16_t SX1276::setPreambleLength(uint16_t preambleLen) {
-    _preambleLengthFSK = preambleLen;
-    
-    writeRegister(SX1276_REG_PREAMBLE_MSB_FSK, (preambleLen >> 8) & 0xFF);
-    writeRegister(SX1276_REG_PREAMBLE_LSB_FSK, preambleLen & 0xFF);
     
     return SX1276_ERR_NONE;
 }
