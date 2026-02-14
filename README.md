@@ -39,6 +39,8 @@ lib_deps =
 
 ## Usage
 
+**Note:** LoRa and FSK/OOK modulations are **enabled by default**. To disable them for minimal memory usage, edit `src/SX1276.h` and comment out `#define LORA_ENABLED` and/or `#define FSK_OOK_ENABLED`.
+
 This library provides **two API styles** to suit different needs:
 
 ### 1. Simplified API (Recommended for New Projects)
@@ -46,7 +48,6 @@ This library provides **two API styles** to suit different needs:
 Direct and memory-efficient - pins specified in `begin()`:
 
 ```cpp
-#define LORA_ENABLED  // Enable LoRa modulation
 #include <SX1276.h>
 
 SX1276 radio;
@@ -78,7 +79,6 @@ void loop() {
 Familiar to RadioLib users - pins in constructor, frequency in MHz:
 
 ```cpp
-#define LORA_ENABLED
 #include <SX1276.h>
 
 SX1276 radio(8, 7, 4);  // cs, irq, rst (like RadioLib's Module)

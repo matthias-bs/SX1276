@@ -13,8 +13,8 @@
 
 #include <Arduino.h>
 
-// Enable FSK/OOK mode
-#define FSK_OOK_ENABLED
+// Note: FSK/OOK mode is enabled by default in the library
+// (No need to define FSK_OOK_ENABLED unless you've disabled it in SX1276.h)
 #include <SX1276.h>
 
 // Pin definitions for Adafruit Feather 32u4 RFM95

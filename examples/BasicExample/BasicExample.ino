@@ -13,8 +13,8 @@
 
 #include <Arduino.h>
 
-// Enable LoRa mode
-#define LORA_ENABLED
+// Note: LoRa mode is enabled by default in the library
+// (No need to define LORA_ENABLED unless you've disabled it in SX1276.h)
 #include <SX1276.h>
 
 // Pin definitions for Adafruit Feather 32u4 RFM95
