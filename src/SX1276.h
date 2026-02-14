@@ -15,10 +15,10 @@
 #include <SPI.h>
 
 // Optional LoRa support - define this to enable LoRa modulation
-// #define LORA_ENABLED
+#define LORA_ENABLED
 
-// Optional FSK/OOK support - define this to enable FSK/OOK modulation
-// #define FSK_OOK_ENABLED
+// Optional FSK/OOK support - define this to enable FSK/OOK modulation  
+#define FSK_OOK_ENABLED
 
 // Debugging support - define to enable debug output
 // #define SX1276_DEBUG
