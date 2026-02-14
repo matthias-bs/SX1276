@@ -18,7 +18,6 @@ jobs:
           - esp32:esp32:esp32:DebugLevel=debug
           #- esp8266:esp8266:generic:dbg=Serial
           #- rp2040:rp2040:adafruit_feather:dbgport=Serial
-          - arduino:avr:leonardo
           - adafruit:avr:feather32u4
 
     runs-on: ubuntu-latest
