@@ -53,6 +53,48 @@ SX1276::SX1276() {
 }
 
 /**
+ * Constructor with pin configuration (RadioLib-compatible)
+ */
+SX1276::SX1276(int cs, int irq, int rst, int gpio) {
+    _csPin = cs;
+    _rstPin = rst;
+    _dio0Pin = irq;  // DIO0 is the primary interrupt pin
+    _freq = 0;
+    _power = 17;
+    _useBoost = true;
+    
+    // Set default modulation based on what's compiled in
+#if defined(LORA_ENABLED)
+    _modulation = SX1276_MODULATION_LORA;
+#elif defined(FSK_OOK_ENABLED)
+    _modulation = SX1276_MODULATION_FSK;
+#else
+    _modulation = SX1276_MODULATION_LORA;  // Fallback
+#endif
+    
+#ifdef LORA_ENABLED
+    _bw = SX1276_BW_125_KHZ;
+    _sf = SX1276_SF_7;
+    _cr = SX1276_CR_4_5;
+    _preambleLength = 8;
+    _syncWord = 0x12;  // Private network
+    _crcEnabled = true;
+#endif
+
+#ifdef FSK_OOK_ENABLED
+    _bitrate = 4800;  // Default 4.8 kbps
+    _freqDev = 5000;  // Default 5 kHz
+    _rxBw = SX1276_RX_BW_10_4_KHZ_FSK;
+    _syncWordFSK[0] = 0x12;
+    _syncWordFSK[1] = 0xAD;
+    _syncWordLen = 2;
+    _preambleLengthFSK = 16;  // 16 bits
+    _fixedLength = false;  // Variable length
+    _crcOnFSK = true;
+#endif
+}
+
+/**
  * Initialize the SX1276 module
  */
 int16_t SX1276::begin(long freq, int cs, int rst, int dio0) {
@@ -110,6 +152,151 @@ int16_t SX1276::setModulation(uint8_t modulation) {
     // Reconfigure the module with new modulation
     return config();
 }
+
+/**
+ * Set modem type (RadioLib-compatible alias)
+ */
+int16_t SX1276::setModem(uint8_t modem) {
+    return setModulation(modem);
+}
+
+#ifdef LORA_ENABLED
+/**
+ * Initialize in LoRa mode (RadioLib-compatible)
+ */
+int16_t SX1276::begin(float freq, float bw, uint8_t sf, uint8_t cr, 
+                      uint8_t syncWord, int8_t power, uint16_t preambleLength, uint8_t gain) {
+    // Check if pins were configured via constructor
+    if (_csPin < 0 || _rstPin < 0 || _dio0Pin < 0) {
+        return SX1276_ERR_CHIP_NOT_FOUND;  // Pins not configured
+    }
+    
+    // Convert frequency from MHz to Hz
+    long freqHz = (long)(freq * 1000000.0);
+    
+    // Initialize hardware
+    pinMode(_csPin, OUTPUT);
+    digitalWrite(_csPin, HIGH);
+    pinMode(_rstPin, OUTPUT);
+    pinMode(_dio0Pin, INPUT);
+    
+    SPI.begin();
+    
+    // Reset the module
+    int16_t state = reset();
+    if (state != SX1276_ERR_NONE) {
+        return state;
+    }
+    
+    // Check version register
+    uint8_t version = readRegister(SX1276_REG_VERSION);
+    if (version != 0x12) {
+        return SX1276_ERR_CHIP_NOT_FOUND;
+    }
+    
+    // Set LoRa mode
+    _modulation = SX1276_MODULATION_LORA;
+    _freq = freqHz;
+    _power = power;
+    
+    // Configure LoRa parameters from arguments
+    // Convert bandwidth from kHz to register value
+    if (bw == 7.8) _bw = SX1276_BW_7_8_KHZ;
+    else if (bw == 10.4) _bw = SX1276_BW_10_4_KHZ;
+    else if (bw == 15.6) _bw = SX1276_BW_15_6_KHZ;
+    else if (bw == 20.8) _bw = SX1276_BW_20_8_KHZ;
+    else if (bw == 31.25) _bw = SX1276_BW_31_25_KHZ;
+    else if (bw == 41.7) _bw = SX1276_BW_41_7_KHZ;
+    else if (bw == 62.5) _bw = SX1276_BW_62_5_KHZ;
+    else if (bw == 125.0) _bw = SX1276_BW_125_KHZ;
+    else if (bw == 250.0) _bw = SX1276_BW_250_KHZ;
+    else if (bw == 500.0) _bw = SX1276_BW_500_KHZ;
+    else _bw = SX1276_BW_125_KHZ;  // Default
+    
+    _sf = sf;
+    _cr = ((cr - 5) << 1);  // Convert denominator (5-8) to register value (0x02-0x08)
+    _preambleLength = preambleLength;
+    _syncWord = syncWord;
+    _crcEnabled = true;
+    
+    // Configure the module
+    state = config();
+    if (state != SX1276_ERR_NONE) {
+        return state;
+    }
+    
+    return SX1276_ERR_NONE;
+}
+#endif
+
+#ifdef FSK_OOK_ENABLED
+/**
+ * Initialize in FSK/OOK mode (RadioLib-compatible)
+ */
+int16_t SX1276::beginFSK(float freq, float br, float freqDev, float rxBw, 
+                         int8_t power, uint16_t preambleLength, bool enableOOK) {
+    // Check if pins were configured via constructor
+    if (_csPin < 0 || _rstPin < 0 || _dio0Pin < 0) {
+        return SX1276_ERR_CHIP_NOT_FOUND;  // Pins not configured
+    }
+    
+    // Convert frequency from MHz to Hz
+    long freqHz = (long)(freq * 1000000.0);
+    
+    // Initialize hardware
+    pinMode(_csPin, OUTPUT);
+    digitalWrite(_csPin, HIGH);
+    pinMode(_rstPin, OUTPUT);
+    pinMode(_dio0Pin, INPUT);
+    
+    SPI.begin();
+    
+    // Reset the module
+    int16_t state = reset();
+    if (state != SX1276_ERR_NONE) {
+        return state;
+    }
+    
+    // Check version register
+    uint8_t version = readRegister(SX1276_REG_VERSION);
+    if (version != 0x12) {
+        return SX1276_ERR_CHIP_NOT_FOUND;
+    }
+    
+    // Set FSK or OOK mode
+    _modulation = enableOOK ? SX1276_MODULATION_OOK : SX1276_MODULATION_FSK;
+    _freq = freqHz;
+    _power = power;
+    
+    // Configure FSK/OOK parameters from arguments
+    _bitrate = (uint32_t)(br * 1000.0);  // Convert kbps to bps
+    _freqDev = (uint32_t)(freqDev * 1000.0);  // Convert kHz to Hz
+    _preambleLengthFSK = preambleLength;
+    
+    // Convert RX bandwidth from kHz to register value
+    // Simplified mapping - use closest value
+    if (rxBw <= 2.6) _rxBw = SX1276_RX_BW_2_6_KHZ;
+    else if (rxBw <= 3.9) _rxBw = SX1276_RX_BW_3_9_KHZ;
+    else if (rxBw <= 5.2) _rxBw = SX1276_RX_BW_5_2_KHZ;
+    else if (rxBw <= 7.8) _rxBw = SX1276_RX_BW_7_8_KHZ_FSK;
+    else if (rxBw <= 10.4) _rxBw = SX1276_RX_BW_10_4_KHZ_FSK;
+    else if (rxBw <= 15.6) _rxBw = SX1276_RX_BW_15_6_KHZ_FSK;
+    else if (rxBw <= 20.8) _rxBw = SX1276_RX_BW_20_8_KHZ_FSK;
+    else if (rxBw <= 31.3) _rxBw = SX1276_RX_BW_31_3_KHZ;
+    else if (rxBw <= 41.7) _rxBw = SX1276_RX_BW_41_7_KHZ_FSK;
+    else if (rxBw <= 62.5) _rxBw = SX1276_RX_BW_62_5_KHZ_FSK;
+    else if (rxBw <= 125.0) _rxBw = SX1276_RX_BW_125_0_KHZ_FSK;
+    else _rxBw = SX1276_RX_BW_250_0_KHZ_FSK;
+    
+    // Configure the module
+    state = config();
+    if (state != SX1276_ERR_NONE) {
+        return state;
+    }
+    
+    return SX1276_ERR_NONE;
+}
+#endif
 
 /**
  * Shutdown the module
@@ -254,6 +441,15 @@ int16_t SX1276::setFrequency(long freq) {
     writeRegister(SX1276_REG_FRF_LSB, frf & 0xFF);
     
     return SX1276_ERR_NONE;
+}
+
+/**
+ * Set carrier frequency (RadioLib-compatible with MHz)
+ */
+int16_t SX1276::setFrequency(float freq) {
+    // Convert MHz to Hz and call the Hz version
+    long freqHz = (long)(freq * 1000000.0);
+    return setFrequency(freqHz);
 }
 
 /**

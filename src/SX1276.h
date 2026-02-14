@@ -267,7 +267,16 @@ public:
     SX1276();
     
     /**
-     * Initialize the SX1276 module
+     * Constructor with pin configuration (RadioLib-compatible)
+     * @param cs Chip select pin
+     * @param irq DIO0 pin (interrupt/GPIO)
+     * @param rst Reset pin
+     * @param gpio Additional GPIO pin (optional, defaults to -1 for unused)
+     */
+    SX1276(int cs, int irq, int rst, int gpio = -1);
+    
+    /**
+     * Initialize the SX1276 module (simplified API)
      * @param freq Frequency in Hz (e.g., 915000000 for 915 MHz)
      * @param cs Chip select pin
      * @param rst Reset pin
@@ -276,12 +285,52 @@ public:
      */
     int16_t begin(long freq, int cs, int rst, int dio0);
     
+#ifdef LORA_ENABLED
+    /**
+     * Initialize the SX1276 module in LoRa mode (RadioLib-compatible)
+     * @param freq Carrier frequency in MHz (e.g., 915.0 for 915 MHz)
+     * @param bw LoRa bandwidth in kHz (default: 125.0 kHz)
+     * @param sf LoRa spreading factor (default: 9, range: 6-12)
+     * @param cr LoRa coding rate denominator (default: 7, range: 5-8)
+     * @param syncWord LoRa sync word (default: 0x12 for private networks, 0x34 for LoRaWAN)
+     * @param power Transmission output power in dBm (default: 10, range: 2-17)
+     * @param preambleLength Length of LoRa preamble in symbols (default: 8)
+     * @param gain Receiver LNA gain (default: 0 for automatic gain control)
+     * @return Error code (SX1276_ERR_NONE on success)
+     */
+    int16_t begin(float freq = 434.0, float bw = 125.0, uint8_t sf = 9, uint8_t cr = 7, 
+                  uint8_t syncWord = 0x12, int8_t power = 10, uint16_t preambleLength = 8, uint8_t gain = 0);
+#endif
+    
+#ifdef FSK_OOK_ENABLED
+    /**
+     * Initialize the SX1276 module in FSK/OOK mode (RadioLib-compatible)
+     * @param freq Carrier frequency in MHz (e.g., 434.0 for 434 MHz)
+     * @param br Bit rate in kbps (default: 4.8 kbps)
+     * @param freqDev Frequency deviation in kHz (default: 5.0 kHz, set to 0 for OOK)
+     * @param rxBw Receiver bandwidth in kHz (default: 125.0 kHz)
+     * @param power Transmission output power in dBm (default: 10, range: 2-17)
+     * @param preambleLength Length of FSK/OOK preamble in bits (default: 16)
+     * @param enableOOK Use OOK modulation instead of FSK (default: false)
+     * @return Error code (SX1276_ERR_NONE on success)
+     */
+    int16_t beginFSK(float freq = 434.0, float br = 4.8, float freqDev = 5.0, float rxBw = 125.0, 
+                     int8_t power = 10, uint16_t preambleLength = 16, bool enableOOK = false);
+#endif
+    
     /**
      * Set modulation type
      * @param modulation Modulation type (SX1276_MODULATION_FSK, SX1276_MODULATION_OOK, or SX1276_MODULATION_LORA)
      * @return Error code (SX1276_ERR_NONE on success)
      */
     int16_t setModulation(uint8_t modulation);
+    
+    /**
+     * Set modem type (RadioLib-compatible alias for setModulation)
+     * @param modem Modem type (SX1276_MODULATION_FSK, SX1276_MODULATION_OOK, or SX1276_MODULATION_LORA)
+     * @return Error code (SX1276_ERR_NONE on success)
+     */
+    int16_t setModem(uint8_t modem);
     
     /**
      * Shutdown the module
@@ -305,11 +354,18 @@ public:
     int16_t receive(uint8_t* data, size_t maxLen);
     
     /**
-     * Set carrier frequency
+     * Set carrier frequency (simplified API with Hz)
      * @param freq Frequency in Hz
      * @return Error code (SX1276_ERR_NONE on success)
      */
     int16_t setFrequency(long freq);
+    
+    /**
+     * Set carrier frequency (RadioLib-compatible with MHz)
+     * @param freq Frequency in MHz (e.g., 915.0 for 915 MHz)
+     * @return Error code (SX1276_ERR_NONE on success)
+     */
+    int16_t setFrequency(float freq);
     
     /**
      * Set output power
