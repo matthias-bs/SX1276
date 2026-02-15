@@ -1133,8 +1133,8 @@ int16_t SX1276::setBitrate(uint32_t bitrate) {
  * Set FSK frequency deviation
  */
 int16_t SX1276::setFrequencyDeviation(uint32_t freqDev) {
-    // Validate frequency deviation (600 Hz - 200 kHz)
-    if (freqDev < 600 || freqDev > 200000) {
+    // Validate frequency deviation: 0 (for OOK) or 600 Hz - 200 kHz
+    if (freqDev != 0 && (freqDev < 600 || freqDev > 200000)) {
         return SX1276_ERR_INVALID_FREQUENCY_DEVIATION;
     }
     
