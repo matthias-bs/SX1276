@@ -76,7 +76,7 @@ void setup() {
   
   // Configure FSK parameters for Bresser sensors
   radio.setBitrate(8220);                          // 8.22 kbps
-  radio.setFrequencyDeviation(57136);              // 57.136417 kHz (using 57136 Hz)
+  radio.setFrequencyDeviation(57136);              // 57.136 kHz (closest to 57.136417 kHz)
   radio.setRxBandwidth(SX1276_RX_BW_250_0_KHZ_FSK); // 250 kHz bandwidth
   radio.setPower(10, true);                        // 10 dBm with PA_BOOST
   
@@ -110,7 +110,7 @@ void setup() {
 void loop() {
   uint8_t buffer[PACKET_LENGTH];
   
-  // Receive with 10 second timeout
+  // Receive packet (blocks with 10 second timeout)
   int16_t state = radio.receive(buffer, sizeof(buffer));
   
   if (state > 0) {
