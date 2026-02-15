@@ -995,7 +995,23 @@ int16_t SX1276::sleep() {
  * Set operating mode
  */
 int16_t SX1276::setMode(uint8_t mode) {
-    writeRegister(SX1276_REG_OP_MODE, mode);
+    // Preserve modulation-select bits (LoRa / FSK-OOK) unless explicitly overridden.
+    // This prevents unintended modulation changes when callers pass only SX1276_MODE_*.
+    const uint8_t modulationMask = SX1276_LORA_MODE | SX1276_FSK_OOK_MODE;
+
+    // Modulation bits requested by the caller (if any).
+    uint8_t requestedModulation = mode & modulationMask;
+
+    if (requestedModulation == 0) {
+        // Caller did not specify modulation bits: preserve current modulation.
+        uint8_t currentOpMode = readRegister(SX1276_REG_OP_MODE);
+        requestedModulation = currentOpMode & modulationMask;
+    }
+
+    // Clear modulation bits from the passed mode and OR in the desired modulation.
+    uint8_t newOpMode = (mode & ~modulationMask) | requestedModulation;
+
+    writeRegister(SX1276_REG_OP_MODE, newOpMode);
     waitForModeReady();
     return SX1276_ERR_NONE;
 }
