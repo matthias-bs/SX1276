@@ -1,0 +1,26 @@
+# CodeQL
+_codeql_*
+
+# Arduino build artifacts
+*.elf
+*.hex
+*.bin
+*.eep
+*.lss
+*.map
+*.sym
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build directories
+build/
+.build/

@@ -1,0 +1,47 @@
+#######################################
+# Syntax Coloring Map For SX1276
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+SX1276	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+begin	KEYWORD2
+end	KEYWORD2
+setModulation	KEYWORD2
+transmit	KEYWORD2
+receive	KEYWORD2
+setFrequency	KEYWORD2
+setPower	KEYWORD2
+setBandwidth	KEYWORD2
+setSpreadingFactor	KEYWORD2
+setCodingRate	KEYWORD2
+setPreambleLength	KEYWORD2
+setSyncWord	KEYWORD2
+setCRC	KEYWORD2
+getRSSI	KEYWORD2
+getSNR	KEYWORD2
+getFrequencyError	KEYWORD2
+standby	KEYWORD2
+sleep	KEYWORD2
+setBitrate	KEYWORD2
+setFrequencyDeviation	KEYWORD2
+setRxBandwidth	KEYWORD2
+setPacketConfig	KEYWORD2
+getRSSI_FSK	KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+
+SX1276_LORA_MODE	LITERAL1
+SX1276_FSK_OOK_MODE	LITERAL1
+SX1276_MODULATION_LORA	LITERAL1
+SX1276_MODULATION_FSK	LITERAL1
+SX1276_MODULATION_OOK	LITERAL1
