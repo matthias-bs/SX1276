@@ -706,6 +706,7 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
         uint32_t start = millis();
         uint32_t iterations = 0;
         const uint32_t maxIterations = 10000000;  // Safety limit (~10M iterations at ~1us each = ~10s)
+        bool rssiRead = false;  // Track if we've read RSSI
         
         while (!(readRegister(SX1276_REG_IRQ_FLAGS_2) & SX1276_IRQ2_PAYLOAD_READY)) {
             if (millis() - start > 10000) {
@@ -718,13 +719,22 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
                 return SX1276_ERR_RX_TIMEOUT;
             }
             
+            // Read RSSI after sync address match (when RSSI is valid)
+            // Only read once to avoid multiple reads
+            if (!rssiRead && (readRegister(SX1276_REG_IRQ_FLAGS_1) & SX1276_IRQ1_SYNC_ADDRESS_MATCH)) {
+                uint8_t rawRSSI = readRegister(SX1276_REG_RSSI_VALUE_FSK);
+                _lastRSSI = -((int16_t)rawRSSI / 2);
+                rssiRead = true;
+            }
+            
             yield();
         }
         
-        // Read RSSI immediately after PayloadReady flag is set
-        // The RSSI register should contain the RSSI of the received packet at this point
-        uint8_t rawRSSI = readRegister(SX1276_REG_RSSI_VALUE_FSK);
-        _lastRSSI = -((int16_t)rawRSSI / 2);
+        // If RSSI wasn't read during sync detection, read it now as a fallback
+        if (!rssiRead) {
+            uint8_t rawRSSI = readRegister(SX1276_REG_RSSI_VALUE_FSK);
+            _lastRSSI = -((int16_t)rawRSSI / 2);
+        }
         
         // Check for CRC error (if enabled)
         if (_crcOnFSK) {
