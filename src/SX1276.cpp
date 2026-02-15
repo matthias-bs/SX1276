@@ -722,7 +722,7 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
         
         // Read RSSI while still in RX mode (must be done before standby)
         uint8_t rawRSSI = readRegister(SX1276_REG_RSSI_VALUE_FSK);
-        _lastRSSI = -(rawRSSI / 2);  // Cache RSSI in dBm
+        _lastRSSI = -((int16_t)rawRSSI / 2);  // Cache RSSI in dBm (preserves -0.5 dBm resolution)
         
         // Get packet length and read data
         uint8_t len;
