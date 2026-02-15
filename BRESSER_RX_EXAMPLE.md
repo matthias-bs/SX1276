@@ -8,7 +8,7 @@ Implement an example sketch BresserRxExample with the following parameters:
 * Rx bandwidth:                        250 kHz
 * output power:                        10 dBm
 * preamble length:                     32 bits (4 bytes)
-* packed mode:                         fixed length, 27 bytes
+* packet mode:                         fixed length, 27 bytes
 * CRC filtering:                       disabled
 * preamble:                            0xAA, 0xAA, 0xAA, 0xAA
 * sync word:                           0xAA, 0x2D
