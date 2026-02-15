@@ -874,7 +874,9 @@ int16_t SX1276::setCodingRate(uint8_t cr) {
     
     return SX1276_ERR_NONE;
 }
+#endif
 
+#if defined(LORA_ENABLED) || defined(FSK_OOK_ENABLED)
 /**
  * Set preamble length (works for both LoRa and FSK/OOK modes)
  */
@@ -903,7 +905,9 @@ int16_t SX1276::setPreambleLength(uint16_t len) {
 
     return SX1276_ERR_WRONG_MODEM;
 }
+#endif
 
+#ifdef LORA_ENABLED
 /**
  * Set sync word
  */
