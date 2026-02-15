@@ -706,7 +706,9 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
         SX1276_DEBUG_PRINT(F(", PAYLOAD_LEN="));
         SX1276_DEBUG_PRINT(readRegister(SX1276_REG_PAYLOAD_LENGTH_FSK));
         SX1276_DEBUG_PRINT(F(", SEQ_CFG1=0x"));
-        SX1276_DEBUG_PRINTLN(readRegister(SX1276_REG_SEQ_CONFIG_1), HEX);
+        SX1276_DEBUG_PRINT(readRegister(SX1276_REG_SEQ_CONFIG_1), HEX);
+        SX1276_DEBUG_PRINT(F(", SEQ_CFG2=0x"));
+        SX1276_DEBUG_PRINTLN(readRegister(SX1276_REG_SEQ_CONFIG_2), HEX);
         
         // Clear IRQ flags before starting reception
         writeRegister(SX1276_REG_IRQ_FLAGS_1, 0xFF);
@@ -1238,10 +1240,16 @@ int16_t SX1276::configFSK() {
     // Set FIFO threshold (half FIFO)
     writeRegister(SX1276_REG_FIFO_THRESH, 0x80 | 0x20);
     
-    // Disable sequencer stop (let automatic sequencing work for packet mode)
-    // SEQ_CONFIG_1: all bits 0 for automatic operation
-    // Don't write 0x40 as that stops the sequencer!
+    // Configure sequencer for proper packet reception
+    // SEQ_CONFIG_1: Enable sequencer (don't stop it)
     writeRegister(SX1276_REG_SEQ_CONFIG_1, 0x00);
+    
+    // SEQ_CONFIG_2: Configure sequencer behavior
+    // Bits 7-5: FromReceive = 001 (packet received on PayloadReady, default)
+    // Bits 4-3: FromRxTimeout = 000 (receive, default)  
+    // Bits 2-0: FromPacketReceived = 000 (sequencer off, default)
+    // Default 0x20 should work, but let's set it explicitly
+    writeRegister(SX1276_REG_SEQ_CONFIG_2, 0x20);
     
     // Set DIO0 to PacketSent/PayloadReady
     writeRegister(SX1276_REG_DIO_MAPPING_1, 0x00);
