@@ -112,7 +112,7 @@ void setup() {
   Serial.println(F("  Sync word:        0xAA 0x2D"));
   Serial.println();
   Serial.println(F("Listening for Bresser sensor packets..."));
-  Serial.println(F("(Displaying ALL received packets - Bresser frames start with 0xD4)"));
+  Serial.println(F("(Only Bresser frames starting with 0xD4 will be displayed)"));
   Serial.println(F("(Timeout prints '.' every 10 seconds if no packets)"));
   Serial.println();
   Serial.flush();  // Ensure all output is sent
@@ -131,50 +131,34 @@ void loop() {
     // Check if it starts with 0xD4 (Bresser frame marker)
     bool isBresser = (buffer[0] == 0xD4);
     
-    // Check if 0xD4 appears anywhere in the packet
-    int d4Position = -1;
-    for (int i = 0; i < state; i++) {
-      if (buffer[i] == 0xD4) {
-        d4Position = i;
-        break;
-      }
-    }
-    
-    // Display all packets for debugging
-    Serial.println(F("========================================"));
+    // Only process and display Bresser packets (first byte must be 0xD4)
     if (isBresser) {
+      // Get signal quality metrics before displaying packet
+      int16_t rssi = radio.getRSSI_FSK();
+      
+      Serial.println(F("========================================"));
       Serial.print(F("Received BRESSER packet ("));
-    } else {
-      Serial.print(F("Received packet (NOT Bresser - first byte: 0x"));
-      if (buffer[0] < 16) Serial.print('0');
-      Serial.print(buffer[0], HEX);
-      if (d4Position >= 0) {
-        Serial.print(F(", 0xD4 at position "));
-        Serial.print(d4Position);
+      Serial.print(state);
+      Serial.println(F(" bytes):"));
+      
+      // Print packet data in hex format
+      Serial.print(F("Data: "));
+      for (int i = 0; i < state; i++) {
+        if (buffer[i] < 16) Serial.print('0');
+        Serial.print(buffer[i], HEX);
+        Serial.print(' ');
       }
-      Serial.print(F(") ("));
+      Serial.println();
+      
+      // Display signal quality metrics
+      Serial.print(F("RSSI: "));
+      Serial.print(rssi);
+      Serial.println(F(" dBm"));
+      
+      Serial.println(F("========================================"));
+      Serial.println();
     }
-    Serial.print(state);
-    Serial.println(F(" bytes):"));
-    
-    // Print packet data in hex format
-    Serial.print(F("Data: "));
-    for (int i = 0; i < state; i++) {
-      if (buffer[i] < 16) Serial.print('0');
-      Serial.print(buffer[i], HEX);
-      Serial.print(' ');
-    }
-    Serial.println();
-    
-    // Get and display signal quality metrics
-    int16_t rssi = radio.getRSSI_FSK();
-    
-    Serial.print(F("RSSI: "));
-    Serial.print(rssi);
-    Serial.println(F(" dBm"));
-    
-    Serial.println(F("========================================"));
-    Serial.println();
+    // Silently ignore non-Bresser packets
     
   } else if (state == SX1276_ERR_RX_TIMEOUT) {
     // No packet received within timeout - print dot for heartbeat

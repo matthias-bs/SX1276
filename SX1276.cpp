@@ -707,10 +707,6 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
         uint32_t iterations = 0;
         const uint32_t maxIterations = 10000000;  // Safety limit (~10M iterations at ~1us each = ~10s)
         
-        // Track maximum RSSI during reception
-        // RSSI_VALUE_FSK is continuously updated during RX
-        uint8_t maxRawRSSI = 0;
-        
         while (!(readRegister(SX1276_REG_IRQ_FLAGS_2) & SX1276_IRQ2_PAYLOAD_READY)) {
             if (millis() - start > 10000) {
                 standby();
@@ -722,27 +718,13 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
                 return SX1276_ERR_RX_TIMEOUT;
             }
             
-            // Periodically sample RSSI during reception to find maximum
-            // Read every 100 iterations to avoid excessive SPI traffic
-            if (iterations % 100 == 0) {
-                uint8_t rawRSSI = readRegister(SX1276_REG_RSSI_VALUE_FSK);
-                if (rawRSSI > maxRawRSSI) {
-                    maxRawRSSI = rawRSSI;
-                }
-            }
-            
             yield();
         }
         
-        // Use the maximum RSSI value found during reception
-        _lastRSSI = -((int16_t)maxRawRSSI / 2);
-        
-        // If RSSI is still 0, try one final read immediately after PayloadReady
-        // This is a fallback in case the register wasn't updating during the loop
-        if (maxRawRSSI == 0) {
-            uint8_t rawRSSI = readRegister(SX1276_REG_RSSI_VALUE_FSK);
-            _lastRSSI = -((int16_t)rawRSSI / 2);
-        }
+        // Read RSSI immediately after PayloadReady flag is set
+        // The RSSI register should contain the RSSI of the received packet at this point
+        uint8_t rawRSSI = readRegister(SX1276_REG_RSSI_VALUE_FSK);
+        _lastRSSI = -((int16_t)rawRSSI / 2);
         
         // Check for CRC error (if enabled)
         if (_crcOnFSK) {
