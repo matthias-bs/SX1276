@@ -49,6 +49,7 @@ SX1276::SX1276() {
     _preambleLengthFSK = 5;  // 5 bytes (40 bits) - typical for FSK
     _fixedLength = false;  // Variable length
     _crcOnFSK = true;
+    _lastRSSI = 0;
 #endif
 }
 
@@ -92,6 +93,7 @@ SX1276::SX1276(int cs, int irq, int rst, int gpio) {
     _preambleLengthFSK = 5;  // 5 bytes (40 bits) - typical for FSK
     _fixedLength = false;  // Variable length
     _crcOnFSK = true;
+    _lastRSSI = 0;
 #endif
 }
 
@@ -718,6 +720,10 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
             }
         }
         
+        // Read RSSI while still in RX mode (must be done before standby)
+        uint8_t rawRSSI = readRegister(SX1276_REG_RSSI_VALUE_FSK);
+        _lastRSSI = -(rawRSSI / 2);  // Cache RSSI in dBm
+        
         // Get packet length and read data
         uint8_t len;
         if (_fixedLength) {
@@ -1094,6 +1100,19 @@ int16_t SX1276::configFSK() {
     // Set OCP to 120mA (safer for FSK/OOK)
     writeRegister(SX1276_REG_OCP, 0x20 | 0x0F);
     
+    // Set RSSI threshold to -127.5 dBm (0xFF) - essentially no threshold
+    // This allows reception of weak signals
+    writeRegister(SX1276_REG_RSSI_THRESH, 0xFF);
+    
+    // Configure RX_CONFIG: AGC auto on, AFC/AGC trigger on RSSI interrupt
+    // Bit 7: RestartRxOnCollision = 0 (off)
+    // Bit 6: RestartRxWithoutPLLLock = 0
+    // Bit 5: RestartRxWithPLLLock = 0
+    // Bit 4: AfcAutoOn = 0 (off initially, can be enabled if needed)
+    // Bit 3: AgcAutoOn = 1 (AGC auto on)
+    // Bits 2-0: AfcAgcTrigger = 001 (RSSI interrupt)
+    writeRegister(SX1276_REG_RX_CONFIG, 0x08 | 0x01);  // AGC auto + RSSI trigger
+    
     // Reset FIFO overrun flag
     writeRegister(SX1276_REG_IRQ_FLAGS_2, SX1276_IRQ2_FIFO_OVERRUN);
     
@@ -1252,10 +1271,10 @@ int16_t SX1276::setPacketConfig(bool fixedLength, bool crcOn) {
 
 /**
  * Get RSSI in FSK/OOK mode
+ * Returns the cached RSSI value from the last received packet
  */
 int16_t SX1276::getRSSI_FSK() {
-    uint8_t rawRSSI = readRegister(SX1276_REG_RSSI_VALUE_FSK);
-    return -(rawRSSI / 2);  // RSSI in dBm
+    return _lastRSSI;
 }
 #endif
 

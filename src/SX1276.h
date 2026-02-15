@@ -544,6 +544,7 @@ private:
     uint16_t _preambleLengthFSK;
     bool _fixedLength;
     bool _crcOnFSK;
+    int16_t _lastRSSI;  // Cached RSSI value from last packet
 #endif
     
     // SPI communication helpers
