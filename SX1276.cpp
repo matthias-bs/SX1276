@@ -1093,7 +1093,17 @@ int16_t SX1276::configFSK() {
     
     SX1276_DEBUG_PRINTLN(F("configFSK() start"));
     
-    // Set to sleep mode for configuration
+    // To switch from LoRa to FSK, we must first go to sleep in the CURRENT mode,
+    // then switch to the new mode. This is required by the SX1276 datasheet.
+    uint8_t currentOpMode = readRegister(SX1276_REG_OP_MODE);
+    if (currentOpMode & SX1276_LORA_MODE) {
+        // Currently in LoRa mode, need to sleep in LoRa first
+        SX1276_DEBUG_PRINTLN(F("Switching from LoRa to FSK mode"));
+        writeRegister(SX1276_REG_OP_MODE, SX1276_MODE_SLEEP | SX1276_LORA_MODE);
+        delay(10);
+    }
+    
+    // Now switch to FSK/OOK sleep mode
     writeRegister(SX1276_REG_OP_MODE, SX1276_MODE_SLEEP | SX1276_FSK_OOK_MODE);
     delay(10);
     
