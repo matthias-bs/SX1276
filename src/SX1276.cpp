@@ -1090,6 +1090,12 @@ int16_t SX1276::configFSK() {
     // Set OCP to 120mA (safer for FSK/OOK)
     writeRegister(SX1276_REG_OCP, 0x20 | 0x0F);
     
+    // Disable Rx timeouts to prevent premature timeout errors
+    // These must be disabled for reliable packet reception
+    writeRegister(SX1276_REG_RX_TIMEOUT_1, 0x00);  // Disable RSSI timeout
+    writeRegister(SX1276_REG_RX_TIMEOUT_2, 0x00);  // Disable preamble timeout
+    writeRegister(SX1276_REG_RX_TIMEOUT_3, 0x00);  // Disable sync timeout
+    
     // Set preamble detector (3 bytes minimum)
     writeRegister(SX1276_REG_PREAMBLE_DETECT, 0xAA);
     
