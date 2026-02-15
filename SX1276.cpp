@@ -820,6 +820,18 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
             spiEnd();
         }
         
+        // Debug: show first few bytes of received packet
+        SX1276_DEBUG_PRINT(F("Packet received, len="));
+        SX1276_DEBUG_PRINT(len);
+        SX1276_DEBUG_PRINT(F(", first bytes: "));
+        for (size_t i = 0; i < (len < 4 ? len : 4); i++) {
+            SX1276_DEBUG_PRINT(F("0x"));
+            if (data[i] < 0x10) SX1276_DEBUG_PRINT(F("0"));
+            SX1276_DEBUG_PRINT(data[i], HEX);
+            SX1276_DEBUG_PRINT(F(" "));
+        }
+        SX1276_DEBUG_PRINTLN();
+        
         // Set back to standby
         standby();
         
