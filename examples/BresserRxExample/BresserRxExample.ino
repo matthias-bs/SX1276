@@ -28,10 +28,16 @@
 // Note: FSK/OOK mode is enabled by default in the library
 #include <SX1276.h>
 
+#if defined(ARDUINO_AVR_FEATHER32U4)
 // Pin definitions for Adafruit Feather 32u4 RFM95
 #define RADIO_CS    8
 #define RADIO_RST   4
 #define RADIO_DIO0  7
+#else
+#define RADIO_CS    LORA_CS
+#define RADIO_RST   LORA_RST
+#define RADIO_DIO0  LORA_IRQ
+#endif
 
 // Radio frequency (868.3 MHz for Bresser sensors)
 #define RADIO_FREQ  868300000L
