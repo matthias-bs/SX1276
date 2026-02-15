@@ -78,6 +78,7 @@ void setup() {
   radio.setBitrate(8220);                          // 8.22 kbps
   radio.setFrequencyDeviation(57136);              // 57.136 kHz (closest to 57.136417 kHz)
   radio.setRxBandwidth(SX1276_RX_BW_250_0_KHZ_FSK); // 250 kHz bandwidth
+  radio.writeRegister(SX1276_REG_AFC_BW, SX1276_RX_BW_250_0_KHZ_FSK); // keep AFC BW in sync with RX BW
   radio.setPower(10, true);                        // 10 dBm with PA_BOOST
   
   // Set sync word (2 bytes: 0xAA, 0x2D)
