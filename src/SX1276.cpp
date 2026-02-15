@@ -709,7 +709,6 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
         
         // Track maximum RSSI during reception
         // RSSI_VALUE_FSK is continuously updated during RX
-        int16_t maxRSSI = 0;
         uint8_t maxRawRSSI = 0;
         
         while (!(readRegister(SX1276_REG_IRQ_FLAGS_2) & SX1276_IRQ2_PAYLOAD_READY)) {
