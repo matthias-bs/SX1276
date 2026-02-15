@@ -21,7 +21,7 @@
 #define FSK_OOK_ENABLED
 
 // Debugging support - define to enable debug output
-// #define SX1276_DEBUG
+#define SX1276_DEBUG
 
 // Debug macro for memory-efficient logging
 #ifdef SX1276_DEBUG

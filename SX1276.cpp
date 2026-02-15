@@ -723,10 +723,16 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
             // Read RSSI after sync address match (when RSSI is valid)
             // Check periodically to reduce SPI traffic
             if (!rssiCaptured && (iterations % rssiCheckInterval == 0)) {
-                if (readRegister(SX1276_REG_IRQ_FLAGS_1) & SX1276_IRQ1_SYNC_ADDRESS_MATCH) {
+                uint8_t irqFlags1 = readRegister(SX1276_REG_IRQ_FLAGS_1);
+                if (irqFlags1 & SX1276_IRQ1_SYNC_ADDRESS_MATCH) {
                     uint8_t rawRSSI = readRegister(SX1276_REG_RSSI_VALUE_FSK);
                     _lastRSSI = -((int16_t)rawRSSI / 2);
                     rssiCaptured = true;
+                    
+                    SX1276_DEBUG_PRINT(F("RSSI captured on sync match: raw=0x"));
+                    SX1276_DEBUG_PRINT(rawRSSI, HEX);
+                    SX1276_DEBUG_PRINT(F(", IRQ1=0x"));
+                    SX1276_DEBUG_PRINTLN(irqFlags1, HEX);
                 }
             }
             
@@ -737,6 +743,12 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
         if (!rssiCaptured) {
             uint8_t rawRSSI = readRegister(SX1276_REG_RSSI_VALUE_FSK);
             _lastRSSI = -((int16_t)rawRSSI / 2);
+            
+            SX1276_DEBUG_PRINT(F("RSSI fallback read: raw=0x"));
+            SX1276_DEBUG_PRINT(rawRSSI, HEX);
+            SX1276_DEBUG_PRINT(F(", IRQ1=0x"));
+            uint8_t irqFlags1 = readRegister(SX1276_REG_IRQ_FLAGS_1);
+            SX1276_DEBUG_PRINTLN(irqFlags1, HEX);
         }
         
         // Check for CRC error (if enabled)
