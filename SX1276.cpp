@@ -1116,6 +1116,11 @@ int16_t SX1276::configFSK() {
     // This allows reception of weak signals
     writeRegister(SX1276_REG_RSSI_THRESH, 0xFF);
     
+    // Configure RSSI measurement (needed for valid RSSI readings)
+    // Bits 7-3: RSSI offset (0 = no offset)
+    // Bits 2-0: RSSI smoothing (2 = 8 samples, default)
+    writeRegister(SX1276_REG_RSSI_CONFIG, 0x02);  // 8 samples smoothing, 0 offset
+    
     // Configure RX_CONFIG: AGC auto on, AFC/AGC trigger on RSSI interrupt
     // Bit 7: RestartRxOnCollision = 0 (off)
     // Bit 6: RestartRxWithoutPLLLock = 0
