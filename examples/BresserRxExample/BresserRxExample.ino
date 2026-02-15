@@ -6,15 +6,15 @@
  * 
  * Radio Configuration:
  * - Carrier frequency:      868.3 MHz
- * - Bit rate:               8.22 kbps
+ * - Bit rate:               8.21 kbps
  * - Frequency deviation:    57.136417 kHz
  * - Rx bandwidth:           250 kHz
  * - Output power:           10 dBm
- * - Preamble length:        40 bits (5 bytes)
+ * - Preamble length:        32 bits (4 bytes)
  * - Packet mode:            Fixed length, 27 bytes
  * - CRC filtering:          Disabled
- * - Preamble:               0xAA, 0xAA, 0xAA, 0xAA, 0xAA
- * - Sync word:              0xAA, 0x2D
+ * - Preamble:               0xAA, 0xAA, 0xAA, 0xAA (+ 0xAA from sync)
+ * - Sync word:              0xAA, 0x2D (last sync byte 0xD4 received as first payload byte)
  * 
  * This example is configured for Adafruit Feather 32u4 RFM95
  * Pins:
@@ -75,18 +75,20 @@ void setup() {
   }
   
   // Configure FSK parameters for Bresser sensors
-  radio.setBitrate(8220);                          // 8.22 kbps
+  radio.setBitrate(8210);                          // 8.21 kbps
   radio.setFrequencyDeviation(57136);              // 57.136 kHz (closest to 57.136417 kHz)
   radio.setRxBandwidth(SX1276_RX_BW_250_0_KHZ_FSK); // 250 kHz bandwidth
   radio.writeRegister(SX1276_REG_AFC_BW, SX1276_RX_BW_250_0_KHZ_FSK); // keep AFC BW in sync with RX BW
   radio.setPower(10, true);                        // 10 dBm with PA_BOOST
   
   // Set sync word (2 bytes: 0xAA, 0x2D)
+  // Note: Bresser preamble is AA AA AA AA AA (40 bits) with sync 2D D4
+  // We use 32-bit preamble + sync AA 2D, so last sync byte 0xD4 appears as first payload byte
   uint8_t syncWord[] = {0xAA, 0x2D};
   radio.setSyncWord(syncWord, 2);
   
-  // Set preamble length (5 bytes = 40 bits)
-  radio.setPreambleLength(5);
+  // Set preamble length (4 bytes = 32 bits)
+  radio.setPreambleLength(4);
   
   // Set packet format (fixed length, CRC disabled)
   radio.setPacketConfig(true, false);
@@ -97,7 +99,7 @@ void setup() {
   Serial.println(F("FSK configuration complete"));
   Serial.println(F("Radio Parameters:"));
   Serial.println(F("  Frequency:        868.3 MHz"));
-  Serial.println(F("  Bit rate:         8.22 kbps"));
+  Serial.println(F("  Bit rate:         8.21 kbps"));
   Serial.println(F("  Freq deviation:   57.136 kHz"));
   Serial.println(F("  Rx bandwidth:     250 kHz"));
   Serial.println(F("  Packet length:    27 bytes (fixed)"));
