@@ -698,6 +698,16 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
             return state;
         }
         
+        // Debug: verify critical registers before RX
+        SX1276_DEBUG_PRINT(F("Before RX: PKT_CFG1=0x"));
+        SX1276_DEBUG_PRINT(readRegister(SX1276_REG_PACKET_CONFIG_1), HEX);
+        SX1276_DEBUG_PRINT(F(", PKT_CFG2=0x"));
+        SX1276_DEBUG_PRINT(readRegister(SX1276_REG_PACKET_CONFIG_2), HEX);
+        SX1276_DEBUG_PRINT(F(", PAYLOAD_LEN="));
+        SX1276_DEBUG_PRINT(readRegister(SX1276_REG_PAYLOAD_LENGTH_FSK));
+        SX1276_DEBUG_PRINT(F(", SEQ_CFG1=0x"));
+        SX1276_DEBUG_PRINTLN(readRegister(SX1276_REG_SEQ_CONFIG_1), HEX);
+        
         // Clear IRQ flags before starting reception
         writeRegister(SX1276_REG_IRQ_FLAGS_1, 0xFF);
         writeRegister(SX1276_REG_IRQ_FLAGS_2, 0xFF);
