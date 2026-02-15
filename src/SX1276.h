@@ -396,14 +396,18 @@ public:
      * @return Error code (SX1276_ERR_NONE on success)
      */
     int16_t setCodingRate(uint8_t cr);
+#endif
     
+#if defined(LORA_ENABLED) || defined(FSK_OOK_ENABLED)
     /**
      * Set preamble length (works for both LoRa and FSK/OOK modes)
      * @param len Preamble length in symbols (LoRa) or bytes (FSK/OOK)
      * @return Error code (SX1276_ERR_NONE on success)
      */
     int16_t setPreambleLength(uint16_t len);
+#endif
     
+#ifdef LORA_ENABLED
     /**
      * Set sync word
      * @param sw Sync word (0x12 for private networks, 0x34 for LoRaWAN)
