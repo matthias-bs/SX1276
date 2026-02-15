@@ -702,9 +702,18 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
         }
         
         // Wait for PayloadReady flag (with timeout)
+        // Double protection: time-based (10s) and iteration-based (prevents infinite loop if millis() fails)
         uint32_t start = millis();
+        uint32_t iterations = 0;
+        const uint32_t maxIterations = 10000000;  // Safety limit (~10M iterations at ~1us each = ~10s)
+        
         while (!(readRegister(SX1276_REG_IRQ_FLAGS_2) & SX1276_IRQ2_PAYLOAD_READY)) {
             if (millis() - start > 10000) {
+                standby();
+                return SX1276_ERR_RX_TIMEOUT;
+            }
+            if (++iterations > maxIterations) {
+                // Emergency timeout if millis() is not advancing
                 standby();
                 return SX1276_ERR_RX_TIMEOUT;
             }
