@@ -113,13 +113,16 @@ void setup() {
   Serial.println();
   Serial.println(F("Listening for Bresser sensor packets..."));
   Serial.println(F("(Displaying only frames starting with 0xD4)"));
+  Serial.println(F("(Timeout prints '.' every 10 seconds)"));
   Serial.println();
+  Serial.flush();  // Ensure all output is sent
 }
 
 void loop() {
   uint8_t buffer[PACKET_LENGTH];
   
   // Receive packet (blocks with 10 second timeout)
+  // Note: If you see dots appearing, the radio is working but not receiving valid packets
   int16_t state = radio.receive(buffer, sizeof(buffer));
   
   if (state > 0) {
@@ -155,6 +158,7 @@ void loop() {
   } else if (state == SX1276_ERR_RX_TIMEOUT) {
     // No packet received within timeout - print dot for heartbeat
     Serial.print('.');
+    Serial.flush();  // Ensure dot is displayed immediately
     
   } else {
     // Other error
