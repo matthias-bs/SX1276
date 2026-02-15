@@ -310,12 +310,12 @@ public:
      * @param freqDev Frequency deviation in kHz (default: 5.0 kHz, set to 0 for OOK)
      * @param rxBw Receiver bandwidth in kHz (default: 125.0 kHz)
      * @param power Transmission output power in dBm (default: 10, range: 2-17)
-     * @param preambleLength Length of FSK/OOK preamble in bytes (default: 16 bytes)
+     * @param preambleLength Length of FSK/OOK preamble in bytes (default: 5 bytes, min: 3)
      * @param enableOOK Use OOK modulation instead of FSK (default: false)
      * @return Error code (SX1276_ERR_NONE on success)
      */
     int16_t beginFSK(float freq = 434.0, float br = 4.8, float freqDev = 5.0, float rxBw = 125.0, 
-                     int8_t power = 10, uint16_t preambleLength = 16, bool enableOOK = false);
+                     int8_t power = 10, uint16_t preambleLength = 5, bool enableOOK = false);
 #endif
     
     /**

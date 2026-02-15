@@ -77,8 +77,8 @@ void setup() {
   uint8_t syncWord[] = {0x69, 0x81};
   radio.setSyncWord(syncWord, 2);
   
-  // Set preamble length to 2 bytes (16 bits)
-  radio.setPreambleLength(2);
+  // Set preamble length (5 bytes = 40 bits, min 3 bytes for preamble detector)
+  radio.setPreambleLength(5);
   
   // Set packet format (variable length, CRC enabled)
   radio.setPacketConfig(false, true);

@@ -46,7 +46,7 @@ SX1276::SX1276() {
     _syncWordFSK[0] = 0x12;
     _syncWordFSK[1] = 0xAD;
     _syncWordLen = 2;
-    _preambleLengthFSK = 16;  // 16 bytes
+    _preambleLengthFSK = 5;  // 5 bytes (40 bits) - typical for FSK
     _fixedLength = false;  // Variable length
     _crcOnFSK = true;
 #endif
@@ -89,7 +89,7 @@ SX1276::SX1276(int cs, int irq, int rst, int gpio) {
     _syncWordFSK[0] = 0x12;
     _syncWordFSK[1] = 0xAD;
     _syncWordLen = 2;
-    _preambleLengthFSK = 16;  // 16 bytes
+    _preambleLengthFSK = 5;  // 5 bytes (40 bits) - typical for FSK
     _fixedLength = false;  // Variable length
     _crcOnFSK = true;
 #endif
