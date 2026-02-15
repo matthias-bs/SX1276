@@ -26,7 +26,7 @@
 #include <Arduino.h>
 
 // Note: FSK/OOK mode is enabled by default in the library
-#include <SX1276.h>
+#include "SX1276.h"
 
 #if defined(ARDUINO_AVR_FEATHER32U4)
 // Pin definitions for Adafruit Feather 32u4 RFM95
