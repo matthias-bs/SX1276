@@ -707,10 +707,10 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
         uint32_t iterations = 0;
         const uint32_t maxIterations = 10000000;  // Safety limit (~10M iterations at ~1us each = ~10s)
         
-        // Sample RSSI during reception (before PayloadReady)
-        // This gives us a better reading than waiting until after packet is received
-        _lastRSSI = 0;  // Initialize
-        bool rssiRead = false;
+        // Track maximum RSSI during reception
+        // RSSI_VALUE_FSK is continuously updated during RX
+        int16_t maxRSSI = 0;
+        uint8_t maxRawRSSI = 0;
         
         while (!(readRegister(SX1276_REG_IRQ_FLAGS_2) & SX1276_IRQ2_PAYLOAD_READY)) {
             if (millis() - start > 10000) {
@@ -723,14 +723,26 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
                 return SX1276_ERR_RX_TIMEOUT;
             }
             
-            // Read RSSI once during reception (after some packets have been received)
-            if (!rssiRead && iterations > 1000) {
+            // Periodically sample RSSI during reception to find maximum
+            // Read every 100 iterations to avoid excessive SPI traffic
+            if (iterations % 100 == 0) {
                 uint8_t rawRSSI = readRegister(SX1276_REG_RSSI_VALUE_FSK);
-                _lastRSSI = -((int16_t)rawRSSI / 2);
-                rssiRead = true;
+                if (rawRSSI > maxRawRSSI) {
+                    maxRawRSSI = rawRSSI;
+                }
             }
             
             yield();
+        }
+        
+        // Use the maximum RSSI value found during reception
+        _lastRSSI = -((int16_t)maxRawRSSI / 2);
+        
+        // If RSSI is still 0, try one final read immediately after PayloadReady
+        // This is a fallback in case the register wasn't updating during the loop
+        if (maxRawRSSI == 0) {
+            uint8_t rawRSSI = readRegister(SX1276_REG_RSSI_VALUE_FSK);
+            _lastRSSI = -((int16_t)rawRSSI / 2);
         }
         
         // Check for CRC error (if enabled)
@@ -742,7 +754,7 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
             }
         }
         
-        // Note: RSSI was already read during reception loop above
+        // Note: RSSI was sampled during reception loop and fallback read attempted
         
         // Get packet length and read data
         uint8_t len;
