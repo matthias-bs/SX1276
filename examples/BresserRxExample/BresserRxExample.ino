@@ -158,7 +158,7 @@ void loop() {
       Serial.println(F("========================================"));
       Serial.println();
     }
-    // Silently ignore non-Bresser packets
+    // else: Silently ignore non-Bresser packets
     
   } else if (state == SX1276_ERR_RX_TIMEOUT) {
     // No packet received within timeout - print dot for heartbeat
