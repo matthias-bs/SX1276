@@ -707,6 +707,11 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
         uint32_t iterations = 0;
         const uint32_t maxIterations = 10000000;  // Safety limit (~10M iterations at ~1us each = ~10s)
         
+        // Sample RSSI during reception (before PayloadReady)
+        // This gives us a better reading than waiting until after packet is received
+        _lastRSSI = 0;  // Initialize
+        bool rssiRead = false;
+        
         while (!(readRegister(SX1276_REG_IRQ_FLAGS_2) & SX1276_IRQ2_PAYLOAD_READY)) {
             if (millis() - start > 10000) {
                 standby();
@@ -717,6 +722,14 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
                 standby();
                 return SX1276_ERR_RX_TIMEOUT;
             }
+            
+            // Read RSSI once during reception (after some packets have been received)
+            if (!rssiRead && iterations > 1000) {
+                uint8_t rawRSSI = readRegister(SX1276_REG_RSSI_VALUE_FSK);
+                _lastRSSI = -((int16_t)rawRSSI / 2);
+                rssiRead = true;
+            }
+            
             yield();
         }
         
@@ -729,9 +742,7 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
             }
         }
         
-        // Read RSSI while still in RX mode (must be done before standby)
-        uint8_t rawRSSI = readRegister(SX1276_REG_RSSI_VALUE_FSK);
-        _lastRSSI = -((int16_t)rawRSSI / 2);  // Cache RSSI in dBm (preserves -0.5 dBm resolution)
+        // Note: RSSI was already read during reception loop above
         
         // Get packet length and read data
         uint8_t len;
