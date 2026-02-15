@@ -330,9 +330,13 @@ int16_t SX1276::reset() {
 int16_t SX1276::config() {
     int16_t state = SX1276_ERR_NONE;
     
+    SX1276_DEBUG_PRINT(F("config() called, _modulation="));
+    SX1276_DEBUG_PRINTLN(_modulation);
+    
 #if defined(LORA_ENABLED) && defined(FSK_OOK_ENABLED)
     // Both modes available - check which one is selected
     if (_modulation == SX1276_MODULATION_LORA) {
+        SX1276_DEBUG_PRINTLN(F("Configuring LoRa mode"));
 #endif
 
 #ifdef LORA_ENABLED
@@ -415,13 +419,16 @@ int16_t SX1276::config() {
 #if defined(LORA_ENABLED) && defined(FSK_OOK_ENABLED)
     } else {
         // FSK/OOK mode
+        SX1276_DEBUG_PRINTLN(F("Calling configFSK()"));
         return configFSK();
     }
 #elif defined(FSK_OOK_ENABLED)
     // Only FSK/OOK mode available
+    SX1276_DEBUG_PRINTLN(F("FSK only mode, calling configFSK()"));
     return configFSK();
 #endif
     
+    SX1276_DEBUG_PRINTLN(F("config() returning"));
     return state;
 }
 
@@ -1084,9 +1091,14 @@ void SX1276::waitForModeReady() {
 int16_t SX1276::configFSK() {
     int16_t state = SX1276_ERR_NONE;
     
+    SX1276_DEBUG_PRINTLN(F("configFSK() start"));
+    
     // Set to sleep mode for configuration
     writeRegister(SX1276_REG_OP_MODE, SX1276_MODE_SLEEP | SX1276_FSK_OOK_MODE);
     delay(10);
+    
+    SX1276_DEBUG_PRINT(F("After setting FSK mode, OP_MODE=0x"));
+    SX1276_DEBUG_PRINTLN(readRegister(SX1276_REG_OP_MODE), HEX);
     
     // Set modulation type (FSK or OOK)
     uint8_t opMode = readRegister(SX1276_REG_OP_MODE);
