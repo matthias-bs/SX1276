@@ -706,6 +706,7 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
         uint32_t start = millis();
         uint32_t iterations = 0;
         const uint32_t maxIterations = 10000000;  // Safety limit (~10M iterations at ~1us each = ~10s)
+        const uint32_t rssiCheckInterval = 50;  // Check for RSSI every 50 iterations (~50us)
         bool rssiCaptured = false;  // Track if we've captured RSSI
         
         while (!(readRegister(SX1276_REG_IRQ_FLAGS_2) & SX1276_IRQ2_PAYLOAD_READY)) {
@@ -720,8 +721,8 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
             }
             
             // Read RSSI after sync address match (when RSSI is valid)
-            // Check periodically to reduce SPI traffic - every 50 iterations (~50us)
-            if (!rssiCaptured && (iterations % 50 == 0)) {
+            // Check periodically to reduce SPI traffic
+            if (!rssiCaptured && (iterations % rssiCheckInterval == 0)) {
                 if (readRegister(SX1276_REG_IRQ_FLAGS_1) & SX1276_IRQ1_SYNC_ADDRESS_MATCH) {
                     uint8_t rawRSSI = readRegister(SX1276_REG_RSSI_VALUE_FSK);
                     _lastRSSI = -((int16_t)rawRSSI / 2);
