@@ -167,6 +167,8 @@ int16_t SX1276::setModem(uint8_t modem) {
  */
 int16_t SX1276::begin(float freq, float bw, uint8_t sf, uint8_t cr, 
                       uint8_t syncWord, int8_t power, uint16_t preambleLength, uint8_t gain) {
+    (void)gain;  // Gain setting not yet implemented
+    
     // Check if pins were configured via constructor
     if (_csPin < 0 || _rstPin < 0 || _dio0Pin < 0) {
         return SX1276_ERR_CHIP_NOT_FOUND;  // Pins not configured
@@ -348,8 +350,8 @@ int16_t SX1276::config() {
             return state;
         }
         
-        // Set frequency
-        state = setFrequency(_freq);
+        // Set frequency (cast to long to avoid ambiguity with float overload)
+        state = setFrequency((long)_freq);
         if (state != SX1276_ERR_NONE) {
             return state;
         }
@@ -1050,8 +1052,8 @@ int16_t SX1276::configFSK() {
         return state;
     }
     
-    // Set frequency
-    state = setFrequency(_freq);
+    // Set frequency (cast to long to avoid ambiguity with float overload)
+    state = setFrequency((long)_freq);
     if (state != SX1276_ERR_NONE) {
         return state;
     }
