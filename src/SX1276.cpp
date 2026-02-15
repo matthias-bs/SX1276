@@ -753,7 +753,6 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
             }
         }
         
-        // Note: RSSI was sampled during reception loop and fallback read attempted
         
         // Get packet length and read data
         uint8_t len;
