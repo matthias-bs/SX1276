@@ -62,7 +62,14 @@ void setup() {
   
   // Configure OOK parameters
   radio.setBitrate(4800);                          // 4.8 kbps
-  radio.setFrequencyDeviation(0);                  // 0 Hz deviation (OOK)
+  int16_t fdState = radio.setFrequencyDeviation(0); // 0 Hz deviation (OOK)
+  if (fdState != SX1276_ERR_NONE) {
+    Serial.print(F("Failed to set frequency deviation, error code: "));
+    Serial.println(fdState);
+    while (true) {
+      delay(1000);
+    }
+  }
   radio.setRxBandwidth(SX1276_RX_BW_10_4_KHZ_FSK); // 10.4 kHz bandwidth
   radio.setPower(17, true);                        // 17 dBm with PA_BOOST
   
