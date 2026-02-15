@@ -1,10 +1,10 @@
 # RadioLib Compatibility Guide
 
-This document describes the compatibility between this simplified SX1276 library and [RadioLib](https://github.com/jgromes/RadioLib).
+This document describes the compatibility between the **SX1276_Radio_Lite** library and [RadioLib](https://github.com/jgromes/RadioLib).
 
 ## Overview
 
-This library is a **simplified port** of RadioLib's SX1276 implementation, specifically optimized for memory-constrained devices (AVR ATmega32u4) while maintaining compatibility with other architectures. It provides **two API styles**:
+The **SX1276_Radio_Lite** library is a **simplified port** of RadioLib's SX1276 implementation, specifically optimized for memory-constrained devices (AVR ATmega32u4) while maintaining compatibility with other architectures. It provides **two API styles**:
 
 1. **Simplified API** - Direct pin specification, optimized for simplicity
 2. **RadioLib-Compatible API** - Familiar to RadioLib users (requires pin configuration in constructor)
@@ -18,7 +18,7 @@ This library is a **simplified port** of RadioLib's SX1276 implementation, speci
 - Comprehensive error handling and status codes
 - Full protocol stack support
 
-### This Library (Simplified)
+### This Library (SX1276_Radio_Lite)
 - **No Module class** - pins specified directly
 - **Flat class hierarchy** - no inheritance
 - **Static memory allocation** - no dynamic allocation

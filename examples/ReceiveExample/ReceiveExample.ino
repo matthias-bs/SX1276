@@ -1,7 +1,7 @@
 /*
  * ReceiveExample.ino
  * 
- * Receive-only example for SX1276 library
+ * Receive-only example for SX1276_Radio_Lite library
  * Continuously listens for LoRa packets and displays them
  * 
  * This example is configured for Adafruit Feather 32u4 RFM95
@@ -34,7 +34,7 @@ void setup() {
     ; // Wait for Serial to be ready (or 5 seconds timeout)
   }
   
-  Serial.println(F("SX1276 Receive Example"));
+  Serial.println(F("SX1276_Radio_Lite - Receive Example"));
   Serial.println(F("Initializing..."));
   
   // Initialize the radio

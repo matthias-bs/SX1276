@@ -31,7 +31,7 @@ void setup() {
     ; // Wait for Serial to be ready (or 5 seconds timeout)
   }
   
-  Serial.println(F("SX1276 RadioLib-Compatible Example"));
+  Serial.println(F("SX1276_Radio_Lite - RadioLib-Compatible Example"));
   Serial.println(F("Initializing with RadioLib-style API..."));
   
   // RadioLib-compatible begin() with defaults
