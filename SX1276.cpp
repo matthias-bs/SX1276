@@ -702,9 +702,9 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
         writeRegister(SX1276_REG_IRQ_FLAGS_1, 0xFF);
         writeRegister(SX1276_REG_IRQ_FLAGS_2, 0xFF);
         
-        // Start reception in single packet mode
-        // RX_SINGLE mode works better with packet engine - receives one packet then stops
-        state = setMode(SX1276_MODE_RX_SINGLE);
+        // Start reception in continuous mode
+        // With sequencer enabled (SEQ_CONFIG_1=0x00), RX_CONTINUOUS should work properly
+        state = setMode(SX1276_MODE_RX_CONTINUOUS);
         if (state != SX1276_ERR_NONE) {
             return state;
         }
