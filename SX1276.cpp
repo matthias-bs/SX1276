@@ -1093,18 +1093,23 @@ int16_t SX1276::configFSK() {
     
     SX1276_DEBUG_PRINTLN(F("configFSK() start"));
     
-    // To switch from LoRa to FSK, we must first go to sleep in the CURRENT mode,
-    // then switch to the new mode. This is required by the SX1276 datasheet.
-    uint8_t currentOpMode = readRegister(SX1276_REG_OP_MODE);
-    if (currentOpMode & SX1276_LORA_MODE) {
-        // Currently in LoRa mode, need to sleep in LoRa first
-        SX1276_DEBUG_PRINTLN(F("Switching from LoRa to FSK mode"));
-        writeRegister(SX1276_REG_OP_MODE, SX1276_MODE_SLEEP | SX1276_LORA_MODE);
-        delay(10);
+    // Follow RadioLib's approach for robust mode switching:
+    // 1. Go to sleep (preserving current modulation)
+    // 2. Change modulation bit
+    // 3. Continue with configuration in the new mode
+    
+    // Step 1: Go to sleep in current modulation
+    // Our setMode() preserves modulation bits when not explicitly specified
+    state = setMode(SX1276_MODE_SLEEP);
+    if (state != SX1276_ERR_NONE) {
+        return state;
     }
     
-    // Now switch to FSK/OOK sleep mode
-    writeRegister(SX1276_REG_OP_MODE, SX1276_MODE_SLEEP | SX1276_FSK_OOK_MODE);
+    // Step 2: Now explicitly set FSK/OOK mode bit (bit 7 = 0)
+    // Read current OP_MODE and clear the LoRa bit
+    uint8_t opMode = readRegister(SX1276_REG_OP_MODE);
+    opMode &= ~SX1276_LORA_MODE;  // Clear bit 7 for FSK/OOK mode
+    writeRegister(SX1276_REG_OP_MODE, opMode);
     delay(10);
     
     SX1276_DEBUG_PRINT(F("After setting FSK mode, OP_MODE=0x"));
