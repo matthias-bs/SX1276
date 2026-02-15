@@ -103,6 +103,17 @@ void setup() {
   radio.writeRegister(SX1276_REG_PAYLOAD_LENGTH_FSK, PACKET_LENGTH);
   
   Serial.println(F("FSK configuration complete"));
+  
+  // Verify we're in FSK mode by reading OP_MODE register
+  uint8_t opMode = radio.readRegister(SX1276_REG_OP_MODE);
+  Serial.print(F("OP_MODE register: 0x"));
+  Serial.println(opMode, HEX);
+  if (opMode & 0x80) {
+    Serial.println(F("WARNING: Radio is in LoRa mode (bit 7 = 1)!"));
+  } else {
+    Serial.println(F("Radio is in FSK/OOK mode (bit 7 = 0)"));
+  }
+  
   Serial.println(F("Radio Parameters:"));
   Serial.println(F("  Frequency:        868.3 MHz"));
   Serial.println(F("  Bit rate:         8.21 kbps"));
@@ -136,6 +147,10 @@ void loop() {
       // Get signal quality metrics before displaying packet
       int16_t rssi = radio.getRSSI_FSK();
       
+      // Debug: Read raw RSSI register to verify
+      uint8_t rawRSSI = radio.readRegister(SX1276_REG_RSSI_VALUE_FSK);
+      uint8_t irqFlags1 = radio.readRegister(SX1276_REG_IRQ_FLAGS_1);
+      
       Serial.println(F("========================================"));
       Serial.print(F("Received BRESSER packet ("));
       Serial.print(state);
@@ -153,7 +168,11 @@ void loop() {
       // Display signal quality metrics
       Serial.print(F("RSSI: "));
       Serial.print(rssi);
-      Serial.println(F(" dBm"));
+      Serial.print(F(" dBm (raw: 0x"));
+      Serial.print(rawRSSI, HEX);
+      Serial.print(F(", IRQ1: 0x"));
+      Serial.print(irqFlags1, HEX);
+      Serial.println(F(")"));
       
       Serial.println(F("========================================"));
       Serial.println();
