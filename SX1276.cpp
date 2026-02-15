@@ -1259,9 +1259,9 @@ int16_t SX1276::configFSK() {
     // SEQ_CONFIG_2: Configure sequencer behavior
     // Bits 7-5: FromReceive = 001 (packet received on PayloadReady, default)
     // Bits 4-3: FromRxTimeout = 000 (receive, default)  
-    // Bits 2-0: FromPacketReceived = 000 (sequencer off, default)
-    // Default 0x20 should work, but let's set it explicitly
-    writeRegister(SX1276_REG_SEQ_CONFIG_2, 0x20);
+    // Bits 2-0: FromPacketReceived = 100 (go back to receive mode after packet)
+    // Value: 0x24 allows continuous packet reception without manual restart
+    writeRegister(SX1276_REG_SEQ_CONFIG_2, 0x24);
     
     // Set DIO0 to PacketSent/PayloadReady
     writeRegister(SX1276_REG_DIO_MAPPING_1, 0x00);
