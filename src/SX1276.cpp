@@ -689,6 +689,10 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
             return state;
         }
         
+        // Clear IRQ flags before starting reception
+        writeRegister(SX1276_REG_IRQ_FLAGS_1, 0xFF);
+        writeRegister(SX1276_REG_IRQ_FLAGS_2, 0xFF);
+        
         // Start reception
         state = setMode(SX1276_MODE_RX_CONTINUOUS);
         if (state != SX1276_ERR_NONE) {
