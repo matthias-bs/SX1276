@@ -1094,6 +1094,9 @@ int16_t SX1276::configFSK() {
     // Set OCP to 120mA (safer for FSK/OOK)
     writeRegister(SX1276_REG_OCP, 0x20 | 0x0F);
     
+    // Reset FIFO overrun flag
+    writeRegister(SX1276_REG_IRQ_FLAGS_2, SX1276_IRQ2_FIFO_OVERRUN);
+    
     // Disable Rx timeouts to prevent premature timeout errors
     // These must be disabled for reliable packet reception
     writeRegister(SX1276_REG_RX_TIMEOUT_1, 0x00);  // Disable RSSI timeout
