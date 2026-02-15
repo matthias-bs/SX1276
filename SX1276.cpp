@@ -1227,8 +1227,10 @@ int16_t SX1276::configFSK() {
     // Set FIFO threshold (half FIFO)
     writeRegister(SX1276_REG_FIFO_THRESH, 0x80 | 0x20);
     
-    // Enable sequence mode
-    writeRegister(SX1276_REG_SEQ_CONFIG_1, 0x40);
+    // Disable sequencer stop (let automatic sequencing work for packet mode)
+    // SEQ_CONFIG_1: all bits 0 for automatic operation
+    // Don't write 0x40 as that stops the sequencer!
+    writeRegister(SX1276_REG_SEQ_CONFIG_1, 0x00);
     
     // Set DIO0 to PacketSent/PayloadReady
     writeRegister(SX1276_REG_DIO_MAPPING_1, 0x00);
