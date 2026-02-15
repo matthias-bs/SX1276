@@ -739,12 +739,17 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
                     SX1276_DEBUG_PRINT(F("RSSI captured on sync match: raw=0x"));
                     SX1276_DEBUG_PRINT(rawRSSI, HEX);
                     SX1276_DEBUG_PRINT(F(", IRQ1=0x"));
-                    SX1276_DEBUG_PRINTLN(irqFlags1, HEX);
+                    SX1276_DEBUG_PRINT(irqFlags1, HEX);
+                    SX1276_DEBUG_PRINT(F(", IRQ2=0x"));
+                    uint8_t irqFlags2 = readRegister(SX1276_REG_IRQ_FLAGS_2);
+                    SX1276_DEBUG_PRINTLN(irqFlags2, HEX);
                 }
             }
             
             yield();
         }
+        
+        SX1276_DEBUG_PRINTLN(F("PayloadReady flag set"));
         
         // If RSSI wasn't captured during sync detection, read it now as a fallback
         if (!rssiCaptured) {
@@ -1116,7 +1121,7 @@ int16_t SX1276::configFSK() {
     SX1276_DEBUG_PRINTLN(readRegister(SX1276_REG_OP_MODE), HEX);
     
     // Set modulation type (FSK or OOK)
-    uint8_t opMode = readRegister(SX1276_REG_OP_MODE);
+    opMode = readRegister(SX1276_REG_OP_MODE);
     if (_modulation == SX1276_MODULATION_OOK) {
         opMode |= 0x20;  // Set OOK bit
     } else {
