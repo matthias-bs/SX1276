@@ -114,6 +114,20 @@ void setup() {
     Serial.println(F("Radio is in FSK/OOK mode (bit 7 = 0)"));
   }
   
+  // Verify packet configuration
+  uint8_t pktConfig1 = radio.readRegister(SX1276_REG_PACKET_CONFIG_1);
+  uint8_t payloadLen = radio.readRegister(SX1276_REG_PAYLOAD_LENGTH_FSK);
+  Serial.print(F("PACKET_CONFIG_1: 0x"));
+  Serial.print(pktConfig1, HEX);
+  Serial.print(F(" (Fixed="));
+  Serial.print((pktConfig1 & 0x80) ? F("Yes") : F("No"));
+  Serial.print(F(", CRC="));
+  Serial.print((pktConfig1 & 0x10) ? F("On") : F("Off"));
+  Serial.println(F(")"));
+  Serial.print(F("PAYLOAD_LENGTH: "));
+  Serial.print(payloadLen);
+  Serial.println(F(" bytes"));
+  
   Serial.println(F("Radio Parameters:"));
   Serial.println(F("  Frequency:        868.3 MHz"));
   Serial.println(F("  Bit rate:         8.21 kbps"));
