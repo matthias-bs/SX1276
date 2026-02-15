@@ -1,6 +1,8 @@
 # OUTLINE
 
 Create a port of RadioLib which only supports the SX1276 radio and is targeted to the Adafruit Feather 32u4 with SX1276 (https://learn.adafruit.com/adafruit-feather-32u4-radio-with-lora-radio-module/)
+
+This lightweight radio library (SX1276_Radio_Lite) is designed with the following goals:
 - With the AVR Atmega 32u4, memory usage is critical.
 - Do not use dynamic memory allocation.
 - Avoid floating point types if possible.

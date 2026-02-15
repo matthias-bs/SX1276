@@ -1,10 +1,10 @@
-# SX1276
+# SX1276_Radio_Lite
 
-Small SX1276 library for Arduino supporting LoRa, FSK, and OOK modulations, optimized for memory-constrained devices.
+Lightweight SX1276 radio library for Arduino supporting LoRa, FSK, and OOK modulations, optimized for memory-constrained devices.
 
 ## Description
 
-This is a simplified port of [RadioLib](https://github.com/jgromes/RadioLib)'s SX1276 implementation, specifically optimized for the Adafruit Feather 32u4 with RFM95 LoRa Radio, while maintaining compatibility with other Arduino architectures.
+This is a simplified port of [RadioLib](https://github.com/jgromes/RadioLib)'s SX1276 implementation, specifically optimized for the Adafruit Feather 32u4 with RFM95 LoRa Radio, while maintaining compatibility with other Arduino architectures. This lightweight variant focuses on memory efficiency for AVR devices.
 
 **📖 Migrating from RadioLib?** See the [RadioLib Compatibility Guide](docs/RADIOLIB_COMPATIBILITY.md) for detailed migration instructions.
 

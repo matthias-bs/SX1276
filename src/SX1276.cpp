@@ -1,7 +1,7 @@
 /**
  * SX1276.cpp
  * 
- * Small SX1276 LoRa library for Arduino
+ * SX1276_Radio_Lite - Lightweight SX1276 radio library for Arduino
  * Simplified port of RadioLib optimized for memory-constrained devices
  * 
  * Copyright (c) 2024 Matthias Prinke
