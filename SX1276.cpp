@@ -49,6 +49,7 @@ SX1276::SX1276() {
     _preambleLengthFSK = 5;  // 5 bytes (40 bits) - typical for FSK
     _fixedLength = false;  // Variable length
     _crcOnFSK = true;
+    _lastRSSI = 0;
 #endif
 }
 
@@ -92,6 +93,7 @@ SX1276::SX1276(int cs, int irq, int rst, int gpio) {
     _preambleLengthFSK = 5;  // 5 bytes (40 bits) - typical for FSK
     _fixedLength = false;  // Variable length
     _crcOnFSK = true;
+    _lastRSSI = 0;
 #endif
 }
 
@@ -689,6 +691,10 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
             return state;
         }
         
+        // Clear IRQ flags before starting reception
+        writeRegister(SX1276_REG_IRQ_FLAGS_1, 0xFF);
+        writeRegister(SX1276_REG_IRQ_FLAGS_2, 0xFF);
+        
         // Start reception
         state = setMode(SX1276_MODE_RX_CONTINUOUS);
         if (state != SX1276_ERR_NONE) {
@@ -696,13 +702,46 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
         }
         
         // Wait for PayloadReady flag (with timeout)
+        // Double protection: time-based (10s) and iteration-based (prevents infinite loop if millis() fails)
         uint32_t start = millis();
+        uint32_t iterations = 0;
+        const uint32_t maxIterations = 10000000;  // Safety limit (~10M iterations at ~1us each = ~10s)
+        
+        // Track maximum RSSI during reception
+        // RSSI_VALUE_FSK is continuously updated during RX
+        uint8_t maxRawRSSI = 0;
+        
         while (!(readRegister(SX1276_REG_IRQ_FLAGS_2) & SX1276_IRQ2_PAYLOAD_READY)) {
             if (millis() - start > 10000) {
                 standby();
                 return SX1276_ERR_RX_TIMEOUT;
             }
+            if (++iterations > maxIterations) {
+                // Emergency timeout if millis() is not advancing
+                standby();
+                return SX1276_ERR_RX_TIMEOUT;
+            }
+            
+            // Periodically sample RSSI during reception to find maximum
+            // Read every 100 iterations to avoid excessive SPI traffic
+            if (iterations % 100 == 0) {
+                uint8_t rawRSSI = readRegister(SX1276_REG_RSSI_VALUE_FSK);
+                if (rawRSSI > maxRawRSSI) {
+                    maxRawRSSI = rawRSSI;
+                }
+            }
+            
             yield();
+        }
+        
+        // Use the maximum RSSI value found during reception
+        _lastRSSI = -((int16_t)maxRawRSSI / 2);
+        
+        // If RSSI is still 0, try one final read immediately after PayloadReady
+        // This is a fallback in case the register wasn't updating during the loop
+        if (maxRawRSSI == 0) {
+            uint8_t rawRSSI = readRegister(SX1276_REG_RSSI_VALUE_FSK);
+            _lastRSSI = -((int16_t)rawRSSI / 2);
         }
         
         // Check for CRC error (if enabled)
@@ -713,6 +752,7 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
                 return SX1276_ERR_CRC_MISMATCH;
             }
         }
+        
         
         // Get packet length and read data
         uint8_t len;
@@ -1090,6 +1130,28 @@ int16_t SX1276::configFSK() {
     // Set OCP to 120mA (safer for FSK/OOK)
     writeRegister(SX1276_REG_OCP, 0x20 | 0x0F);
     
+    // Set RSSI threshold to -127.5 dBm (0xFF) - essentially no threshold
+    // This allows reception of weak signals
+    writeRegister(SX1276_REG_RSSI_THRESH, 0xFF);
+    
+    // Configure RX_CONFIG: AGC auto on, AFC/AGC trigger on RSSI interrupt
+    // Bit 7: RestartRxOnCollision = 0 (off)
+    // Bit 6: RestartRxWithoutPLLLock = 0
+    // Bit 5: RestartRxWithPLLLock = 0
+    // Bit 4: AfcAutoOn = 0 (off initially, can be enabled if needed)
+    // Bit 3: AgcAutoOn = 1 (AGC auto on)
+    // Bits 2-0: AfcAgcTrigger = 001 (RSSI interrupt)
+    writeRegister(SX1276_REG_RX_CONFIG, 0x08 | 0x01);  // AGC auto + RSSI trigger
+    
+    // Reset FIFO overrun flag
+    writeRegister(SX1276_REG_IRQ_FLAGS_2, SX1276_IRQ2_FIFO_OVERRUN);
+    
+    // Disable Rx timeouts to prevent premature timeout errors
+    // These must be disabled for reliable packet reception
+    writeRegister(SX1276_REG_RX_TIMEOUT_1, 0x00);  // Disable RSSI timeout
+    writeRegister(SX1276_REG_RX_TIMEOUT_2, 0x00);  // Disable preamble timeout
+    writeRegister(SX1276_REG_RX_TIMEOUT_3, 0x00);  // Disable sync timeout
+    
     // Set preamble detector (3 bytes minimum)
     writeRegister(SX1276_REG_PREAMBLE_DETECT, 0xAA);
     
@@ -1239,10 +1301,10 @@ int16_t SX1276::setPacketConfig(bool fixedLength, bool crcOn) {
 
 /**
  * Get RSSI in FSK/OOK mode
+ * Returns the cached RSSI value from the last received packet
  */
 int16_t SX1276::getRSSI_FSK() {
-    uint8_t rawRSSI = readRegister(SX1276_REG_RSSI_VALUE_FSK);
-    return -(rawRSSI / 2);  // RSSI in dBm
+    return _lastRSSI;
 }
 #endif
 
