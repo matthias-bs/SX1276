@@ -131,7 +131,16 @@ void loop() {
     // Check if it starts with 0xD4 (Bresser frame marker)
     bool isBresser = (buffer[0] == 0xD4);
     
-    // Display all packets for debugging (comment out the if statement to see only Bresser packets)
+    // Check if 0xD4 appears anywhere in the packet
+    int d4Position = -1;
+    for (int i = 0; i < state; i++) {
+      if (buffer[i] == 0xD4) {
+        d4Position = i;
+        break;
+      }
+    }
+    
+    // Display all packets for debugging
     Serial.println(F("========================================"));
     if (isBresser) {
       Serial.print(F("Received BRESSER packet ("));
@@ -139,6 +148,10 @@ void loop() {
       Serial.print(F("Received packet (NOT Bresser - first byte: 0x"));
       if (buffer[0] < 16) Serial.print('0');
       Serial.print(buffer[0], HEX);
+      if (d4Position >= 0) {
+        Serial.print(F(", 0xD4 at position "));
+        Serial.print(d4Position);
+      }
       Serial.print(F(") ("));
     }
     Serial.print(state);
