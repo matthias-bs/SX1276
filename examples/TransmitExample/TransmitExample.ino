@@ -1,7 +1,7 @@
 /*
  * TransmitExample.ino
  * 
- * Transmit-only example for SX1276 library
+ * Transmit-only example for SX1276_Radio_Lite library
  * Periodically sends LoRa packets
  * 
  * This example is configured for Adafruit Feather 32u4 RFM95
@@ -40,7 +40,7 @@ void setup() {
     ; // Wait for Serial to be ready (or 5 seconds timeout)
   }
   
-  Serial.println(F("SX1276 Transmit Example"));
+  Serial.println(F("SX1276_Radio_Lite - Transmit Example"));
   Serial.println(F("Initializing..."));
   
   // Initialize the radio

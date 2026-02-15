@@ -1,7 +1,7 @@
 /*
  * BasicExample.ino
  * 
- * Basic example for SX1276 library
+ * Basic example for SX1276_Radio_Lite library
  * Demonstrates LoRa transmission and reception
  * 
  * This example is configured for Adafruit Feather 32u4 RFM95
@@ -34,7 +34,7 @@ void setup() {
     ; // Wait for Serial to be ready (or 5 seconds timeout)
   }
   
-  Serial.println(F("SX1276 Basic Example"));
+  Serial.println(F("SX1276_Radio_Lite - Basic Example"));
   Serial.println(F("Initializing..."));
   
   // Initialize the radio

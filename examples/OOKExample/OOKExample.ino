@@ -1,7 +1,7 @@
 /*
  * OOKExample.ino
  * 
- * OOK (On-Off Keying) example for SX1276 library
+ * OOK (On-Off Keying) example for SX1276_Radio_Lite library
  * Demonstrates OOK transmission and reception
  * 
  * This example is configured for Adafruit Feather 32u4 RFM95
@@ -34,7 +34,7 @@ void setup() {
     ; // Wait for Serial to be ready (or 5 seconds timeout)
   }
   
-  Serial.println(F("SX1276 OOK Example"));
+  Serial.println(F("SX1276_Radio_Lite - OOK Example"));
   Serial.println(F("Initializing..."));
   
   // Initialize the radio
