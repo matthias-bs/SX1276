@@ -330,9 +330,13 @@ int16_t SX1276::reset() {
 int16_t SX1276::config() {
     int16_t state = SX1276_ERR_NONE;
     
+    SX1276_DEBUG_PRINT(F("config() called, _modulation="));
+    SX1276_DEBUG_PRINTLN(_modulation);
+    
 #if defined(LORA_ENABLED) && defined(FSK_OOK_ENABLED)
     // Both modes available - check which one is selected
     if (_modulation == SX1276_MODULATION_LORA) {
+        SX1276_DEBUG_PRINTLN(F("Configuring LoRa mode"));
 #endif
 
 #ifdef LORA_ENABLED
@@ -415,13 +419,16 @@ int16_t SX1276::config() {
 #if defined(LORA_ENABLED) && defined(FSK_OOK_ENABLED)
     } else {
         // FSK/OOK mode
+        SX1276_DEBUG_PRINTLN(F("Calling configFSK()"));
         return configFSK();
     }
 #elif defined(FSK_OOK_ENABLED)
     // Only FSK/OOK mode available
+    SX1276_DEBUG_PRINTLN(F("FSK only mode, calling configFSK()"));
     return configFSK();
 #endif
     
+    SX1276_DEBUG_PRINTLN(F("config() returning"));
     return state;
 }
 
@@ -691,11 +698,24 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
             return state;
         }
         
+        // Debug: verify critical registers before RX
+        SX1276_DEBUG_PRINT(F("Before RX: PKT_CFG1=0x"));
+        SX1276_DEBUG_PRINT(readRegister(SX1276_REG_PACKET_CONFIG_1), HEX);
+        SX1276_DEBUG_PRINT(F(", PKT_CFG2=0x"));
+        SX1276_DEBUG_PRINT(readRegister(SX1276_REG_PACKET_CONFIG_2), HEX);
+        SX1276_DEBUG_PRINT(F(", PAYLOAD_LEN="));
+        SX1276_DEBUG_PRINT(readRegister(SX1276_REG_PAYLOAD_LENGTH_FSK));
+        SX1276_DEBUG_PRINT(F(", SEQ_CFG1=0x"));
+        SX1276_DEBUG_PRINT(readRegister(SX1276_REG_SEQ_CONFIG_1), HEX);
+        SX1276_DEBUG_PRINT(F(", SEQ_CFG2=0x"));
+        SX1276_DEBUG_PRINTLN(readRegister(SX1276_REG_SEQ_CONFIG_2), HEX);
+        
         // Clear IRQ flags before starting reception
         writeRegister(SX1276_REG_IRQ_FLAGS_1, 0xFF);
         writeRegister(SX1276_REG_IRQ_FLAGS_2, 0xFF);
         
-        // Start reception
+        // Start reception in continuous mode
+        // With sequencer enabled (SEQ_CONFIG_1=0x00), RX_CONTINUOUS should work properly
         state = setMode(SX1276_MODE_RX_CONTINUOUS);
         if (state != SX1276_ERR_NONE) {
             return state;
@@ -706,10 +726,8 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
         uint32_t start = millis();
         uint32_t iterations = 0;
         const uint32_t maxIterations = 10000000;  // Safety limit (~10M iterations at ~1us each = ~10s)
-        
-        // Track maximum RSSI during reception
-        // RSSI_VALUE_FSK is continuously updated during RX
-        uint8_t maxRawRSSI = 0;
+        const uint32_t rssiCheckInterval = 50;  // Check for RSSI every 50 iterations (~50us)
+        bool rssiCaptured = false;  // Track if we've captured RSSI
         
         while (!(readRegister(SX1276_REG_IRQ_FLAGS_2) & SX1276_IRQ2_PAYLOAD_READY)) {
             if (millis() - start > 10000) {
@@ -722,26 +740,40 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
                 return SX1276_ERR_RX_TIMEOUT;
             }
             
-            // Periodically sample RSSI during reception to find maximum
-            // Read every 100 iterations to avoid excessive SPI traffic
-            if (iterations % 100 == 0) {
-                uint8_t rawRSSI = readRegister(SX1276_REG_RSSI_VALUE_FSK);
-                if (rawRSSI > maxRawRSSI) {
-                    maxRawRSSI = rawRSSI;
+            // Read RSSI after sync address match (when RSSI is valid)
+            // Check periodically to reduce SPI traffic
+            if (!rssiCaptured && (iterations % rssiCheckInterval == 0)) {
+                uint8_t irqFlags1 = readRegister(SX1276_REG_IRQ_FLAGS_1);
+                if (irqFlags1 & SX1276_IRQ1_SYNC_ADDRESS_MATCH) {
+                    uint8_t rawRSSI = readRegister(SX1276_REG_RSSI_VALUE_FSK);
+                    _lastRSSI = -((int16_t)rawRSSI / 2);
+                    rssiCaptured = true;
+                    
+                    SX1276_DEBUG_PRINT(F("RSSI captured on sync match: raw=0x"));
+                    SX1276_DEBUG_PRINT(rawRSSI, HEX);
+                    SX1276_DEBUG_PRINT(F(", IRQ1=0x"));
+                    SX1276_DEBUG_PRINT(irqFlags1, HEX);
+                    SX1276_DEBUG_PRINT(F(", IRQ2=0x"));
+                    uint8_t irqFlags2 = readRegister(SX1276_REG_IRQ_FLAGS_2);
+                    SX1276_DEBUG_PRINTLN(irqFlags2, HEX);
                 }
             }
             
             yield();
         }
         
-        // Use the maximum RSSI value found during reception
-        _lastRSSI = -((int16_t)maxRawRSSI / 2);
+        SX1276_DEBUG_PRINTLN(F("PayloadReady flag set"));
         
-        // If RSSI is still 0, try one final read immediately after PayloadReady
-        // This is a fallback in case the register wasn't updating during the loop
-        if (maxRawRSSI == 0) {
+        // If RSSI wasn't captured during sync detection, read it now as a fallback
+        if (!rssiCaptured) {
             uint8_t rawRSSI = readRegister(SX1276_REG_RSSI_VALUE_FSK);
             _lastRSSI = -((int16_t)rawRSSI / 2);
+            
+            SX1276_DEBUG_PRINT(F("RSSI fallback read: raw=0x"));
+            SX1276_DEBUG_PRINT(rawRSSI, HEX);
+            SX1276_DEBUG_PRINT(F(", IRQ1=0x"));
+            uint8_t irqFlags1 = readRegister(SX1276_REG_IRQ_FLAGS_1);
+            SX1276_DEBUG_PRINTLN(irqFlags1, HEX);
         }
         
         // Check for CRC error (if enabled)
@@ -787,6 +819,18 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
             }
             spiEnd();
         }
+        
+        // Debug: show first few bytes of received packet
+        SX1276_DEBUG_PRINT(F("Packet received, len="));
+        SX1276_DEBUG_PRINT(len);
+        SX1276_DEBUG_PRINT(F(", first bytes: "));
+        for (size_t i = 0; i < (len < 4 ? len : 4); i++) {
+            SX1276_DEBUG_PRINT(F("0x"));
+            if (data[i] < 0x10) SX1276_DEBUG_PRINT(F("0"));
+            SX1276_DEBUG_PRINT(data[i], HEX);
+            SX1276_DEBUG_PRINT(F(" "));
+        }
+        SX1276_DEBUG_PRINTLN();
         
         // Set back to standby
         standby();
@@ -879,7 +923,9 @@ int16_t SX1276::setCodingRate(uint8_t cr) {
     
     return SX1276_ERR_NONE;
 }
+#endif
 
+#if defined(LORA_ENABLED) || defined(FSK_OOK_ENABLED)
 /**
  * Set preamble length (works for both LoRa and FSK/OOK modes)
  */
@@ -908,7 +954,9 @@ int16_t SX1276::setPreambleLength(uint16_t len) {
 
     return SX1276_ERR_WRONG_MODEM;
 }
+#endif
 
+#ifdef LORA_ENABLED
 /**
  * Set sync word
  */
@@ -1073,12 +1121,32 @@ void SX1276::waitForModeReady() {
 int16_t SX1276::configFSK() {
     int16_t state = SX1276_ERR_NONE;
     
-    // Set to sleep mode for configuration
-    writeRegister(SX1276_REG_OP_MODE, SX1276_MODE_SLEEP | SX1276_FSK_OOK_MODE);
+    SX1276_DEBUG_PRINTLN(F("configFSK() start"));
+    
+    // Follow RadioLib's approach for robust mode switching:
+    // 1. Go to sleep (preserving current modulation)
+    // 2. Change modulation bit
+    // 3. Continue with configuration in the new mode
+    
+    // Step 1: Go to sleep in current modulation
+    // Our setMode() preserves modulation bits when not explicitly specified
+    state = setMode(SX1276_MODE_SLEEP);
+    if (state != SX1276_ERR_NONE) {
+        return state;
+    }
+    
+    // Step 2: Now explicitly set FSK/OOK mode bit (bit 7 = 0)
+    // Read current OP_MODE and clear the LoRa bit
+    uint8_t opMode = readRegister(SX1276_REG_OP_MODE);
+    opMode &= ~SX1276_LORA_MODE;  // Clear bit 7 for FSK/OOK mode
+    writeRegister(SX1276_REG_OP_MODE, opMode);
     delay(10);
     
+    SX1276_DEBUG_PRINT(F("After setting FSK mode, OP_MODE=0x"));
+    SX1276_DEBUG_PRINTLN(readRegister(SX1276_REG_OP_MODE), HEX);
+    
     // Set modulation type (FSK or OOK)
-    uint8_t opMode = readRegister(SX1276_REG_OP_MODE);
+    opMode = readRegister(SX1276_REG_OP_MODE);
     if (_modulation == SX1276_MODULATION_OOK) {
         opMode |= 0x20;  // Set OOK bit
     } else {
@@ -1134,6 +1202,11 @@ int16_t SX1276::configFSK() {
     // This allows reception of weak signals
     writeRegister(SX1276_REG_RSSI_THRESH, 0xFF);
     
+    // Configure RSSI measurement (needed for valid RSSI readings)
+    // Bits 7-3: RSSI offset (0 = no offset)
+    // Bits 2-0: RSSI smoothing (2 = 8 samples, default)
+    writeRegister(SX1276_REG_RSSI_CONFIG, 0x02);  // 8 samples smoothing, 0 offset
+    
     // Configure RX_CONFIG: AGC auto on, AFC/AGC trigger on RSSI interrupt
     // Bit 7: RestartRxOnCollision = 0 (off)
     // Bit 6: RestartRxWithoutPLLLock = 0
@@ -1179,8 +1252,16 @@ int16_t SX1276::configFSK() {
     // Set FIFO threshold (half FIFO)
     writeRegister(SX1276_REG_FIFO_THRESH, 0x80 | 0x20);
     
-    // Enable sequence mode
-    writeRegister(SX1276_REG_SEQ_CONFIG_1, 0x40);
+    // Configure sequencer for proper packet reception
+    // SEQ_CONFIG_1: Enable sequencer (don't stop it)
+    writeRegister(SX1276_REG_SEQ_CONFIG_1, 0x00);
+    
+    // SEQ_CONFIG_2: Configure sequencer behavior
+    // Bits 7-5: FromReceive = 001 (packet received on PayloadReady, default)
+    // Bits 4-3: FromRxTimeout = 000 (receive, default)  
+    // Bits 2-0: FromPacketReceived = 100 (go back to receive mode after packet)
+    // Value: 0x24 allows continuous packet reception without manual restart
+    writeRegister(SX1276_REG_SEQ_CONFIG_2, 0x24);
     
     // Set DIO0 to PacketSent/PayloadReady
     writeRegister(SX1276_REG_DIO_MAPPING_1, 0x00);
