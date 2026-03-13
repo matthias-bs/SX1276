@@ -175,8 +175,8 @@ DecodeStatus decode6In1(const uint8_t *msg, uint8_t msgSize,
     if ((add_bytes(&msg[2], 16) & 0xFF) != 0xFF)
         return DECODE_CHK_ERR;
 
-    uint32_t id_tmp   = ((uint32_t)msg[2] << 24) | (msg[3] << 16)
-                       | (msg[4] << 8) | msg[5];
+    uint32_t id_tmp   = ((uint32_t)msg[2] << 24) | ((uint32_t)msg[3] << 16)
+                       | ((uint32_t)msg[4] << 8) | (uint32_t)msg[5];
     uint8_t  type_tmp = msg[6] >> 4;
     uint8_t  chan_tmp = msg[6] & 0x07;
     uint8_t  flags    = msg[16] & 0x0F;

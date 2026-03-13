@@ -185,7 +185,7 @@ void loop()
     else
         batt = F("Low");
 
-    Serial.print(F("Id: [")); Serial.print(sensor.sensor_id, HEX);
+    Serial.print(F("Id: [")); Serial.print((unsigned long)sensor.sensor_id, HEX);
     Serial.print(F("] Typ: [")); Serial.print(sensor.s_type, HEX);
     Serial.print(F("] Ch: [")); Serial.print(sensor.chan);
     Serial.print(F("] St: [")); Serial.print(sensor.startup);
