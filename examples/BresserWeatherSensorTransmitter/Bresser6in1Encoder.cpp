@@ -120,15 +120,20 @@ void encode6In1ThermoHygro(uint8_t *msg,
     // (Temperatures ≤ -50 °C trigger a special Bresser 3-in-1 anemometer
     // correction in the decoder and shall not be used for thermo-hygro sensors.)
     // -----------------------------------------------------------------
-    bool sign;
-    int  temp_raw;
+    bool  sign;
+    int   temp_raw;
+    float temp_c_limited = temp_c;
 
-    if (temp_c >= 0.0f) {
+    // Clamp to representable thermo-hygro temperature range (-49.9 … +99.9 °C)
+    if (temp_c_limited < -49.9f) temp_c_limited = -49.9f;
+    if (temp_c_limited > 99.9f)  temp_c_limited = 99.9f;
+
+    if (temp_c_limited >= 0.0f) {
         sign     = false;
-        temp_raw = (int)(temp_c * 10.0f + 0.5f);   // round to nearest 0.1 °C
+        temp_raw = (int)(temp_c_limited * 10.0f + 0.5f);   // round to nearest 0.1 °C
     } else {
         sign     = true;
-        temp_raw = 1000 - (int)(-temp_c * 10.0f + 0.5f);
+        temp_raw = 1000 - (int)(-temp_c_limited * 10.0f + 0.5f);
     }
 
     // Clamp to representable BCD range (0-999)
