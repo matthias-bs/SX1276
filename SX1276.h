@@ -139,9 +139,11 @@
 #define SX1276_MODE_RX_SINGLE                   0x06
 #define SX1276_MODE_CAD                         0x07
 
-// Modulation Type
+// Modulation Type (RegOpMode bit 7)
 #define SX1276_LORA_MODE                        0x80
 #define SX1276_FSK_OOK_MODE                     0x00
+// OOK modulation select (RegOpMode bit 5; 0=FSK, 1=OOK — only in FSK/OOK mode)
+#define SX1276_OOK_MODULATION                   0x20
 
 // Modulation Type Selection
 #define SX1276_MODULATION_FSK                   0x00
@@ -249,12 +251,12 @@
 #define SX1276_ERR_INVALID_FREQUENCY_DEVIATION  -12
 #define SX1276_ERR_INVALID_SYNC_WORD            -13
 #define SX1276_ERR_WRONG_MODEM                  -14
+#define SX1276_ERR_INVALID_PARAM                -15
 
 // Constants
 #define SX1276_MAX_PACKET_LENGTH                255
 #define SX1276_FIFO_SIZE                        256
 #define SX1276_FXOSC                            32000000L  // 32 MHz crystal
-#define SX1276_FSTEP                            (SX1276_FXOSC / 524288.0)  // FXOSC / 2^19
 
 /**
  * SX1276 class - flat hierarchy, no inheritance
@@ -295,11 +297,10 @@ public:
      * @param syncWord LoRa sync word (default: 0x12 for private networks, 0x34 for LoRaWAN)
      * @param power Transmission output power in dBm (default: 10, range: 2-17)
      * @param preambleLength Length of LoRa preamble in symbols (default: 8)
-     * @param gain Receiver LNA gain (default: 0 for automatic gain control)
      * @return Error code (SX1276_ERR_NONE on success)
      */
     int16_t begin(float freq = 434.0, float bw = 125.0, uint8_t sf = 9, uint8_t cr = 7, 
-                  uint8_t syncWord = 0x12, int8_t power = 10, uint16_t preambleLength = 8, uint8_t gain = 0);
+                  uint8_t syncWord = 0x12, int8_t power = 10, uint16_t preambleLength = 8);
 #endif
     
 #ifdef FSK_OOK_ENABLED
@@ -310,12 +311,12 @@ public:
      * @param freqDev Frequency deviation in kHz (default: 5.0 kHz, set to 0 for OOK)
      * @param rxBw Receiver bandwidth in kHz (default: 125.0 kHz)
      * @param power Transmission output power in dBm (default: 10, range: 2-17)
-     * @param preambleLength Length of FSK/OOK preamble in bytes (default: 5 bytes, min: 3)
+     * @param preambleLength Length of FSK/OOK preamble in bits (default: 40 bits = 5 bytes, min: 24 bits). Matches RadioLib API.
      * @param enableOOK Use OOK modulation instead of FSK (default: false)
      * @return Error code (SX1276_ERR_NONE on success)
      */
     int16_t beginFSK(float freq = 434.0, float br = 4.8, float freqDev = 5.0, float rxBw = 125.0, 
-                     int8_t power = 10, uint16_t preambleLength = 5, bool enableOOK = false);
+                     int8_t power = 10, uint16_t preambleLength = 40, bool enableOOK = false);
 #endif
     
     /**
@@ -352,7 +353,37 @@ public:
      * @return Number of bytes received, or error code (< 0)
      */
     int16_t receive(uint8_t* data, size_t maxLen);
-    
+
+    /**
+     * Start non-blocking reception.
+     * Configure the chip for continuous RX and return immediately.
+     * Use with setPacketReceivedAction() for interrupt-driven reception.
+     * @return Error code (SX1276_ERR_NONE on success)
+     */
+    int16_t startReceive();
+
+    /**
+     * Read received data from FIFO (non-blocking, call after interrupt fires).
+     * Compatible with RadioLib's readData() API.
+     * @param data   Buffer to store received data
+     * @param maxLen Maximum number of bytes to read (buffer size)
+     * @return Number of bytes read, or negative error code
+     */
+    int16_t readData(uint8_t* data, size_t maxLen);
+
+    /**
+     * Attach a callback function to the packet-received interrupt (DIO0 RISING).
+     * Compatible with RadioLib's setPacketReceivedAction() API.
+     * Call startReceive() afterwards to begin non-blocking reception.
+     * @param func Pointer to ISR callback (must be IRAM_ATTR on ESP32)
+     */
+    void setPacketReceivedAction(void (*func)(void));
+
+    /**
+     * Detach the packet-received interrupt callback.
+     */
+    void clearPacketReceivedAction();
+
     /**
      * Set carrier frequency (simplified API with Hz)
      * @param freq Frequency in Hz
@@ -401,7 +432,7 @@ public:
 #if defined(LORA_ENABLED) || defined(FSK_OOK_ENABLED)
     /**
      * Set preamble length (works for both LoRa and FSK/OOK modes)
-     * @param len Preamble length in symbols (LoRa) or bytes (FSK/OOK)
+     * @param len Preamble length in symbols (LoRa) or bits (FSK/OOK). Matches RadioLib API.
      * @return Error code (SX1276_ERR_NONE on success)
      */
     int16_t setPreambleLength(uint16_t len);
@@ -547,6 +578,9 @@ private:
     int16_t _lastRSSI;  // Cached RSSI value from last packet
 #endif
     
+    // Packet-received interrupt callback (set by setPacketReceivedAction)
+    void (*_packetReceivedCallback)(void);
+
     // SPI communication helpers
     void spiBegin();
     void spiEnd();
