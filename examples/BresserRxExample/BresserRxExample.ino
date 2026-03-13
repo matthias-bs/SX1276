@@ -1,8 +1,11 @@
 /*
  * BresserRxExample.ino
  * 
- * Receive-only example for SX1276 library configured for Bresser weather sensors
- * Listens for FSK packets from Bresser weather station sensors and displays them
+ * Receive-only example for SX1276 library configured for Bresser weather sensors.
+ * Listens for FSK packets from Bresser weather station sensors and displays them.
+ * Initialization mirrors WeatherSensor.cpp (BresserWeatherSensorReceiver) for SX1276.
+ * Reception is interrupt-driven (setPacketReceivedAction + startReceive + readData),
+ * matching the pattern in WeatherSensor::begin() / WeatherSensor::getMessage().
  * 
  * Radio Configuration:
  * - Carrier frequency:      868.3 MHz
@@ -10,21 +13,23 @@
  * - Frequency deviation:    57.136417 kHz
  * - Rx bandwidth:           250 kHz
  * - Output power:           10 dBm
- * - Preamble length:        32 bits (4 bytes)
- * - Packet mode:            Fixed length, 27 bytes
+ * - Preamble:               AA AA AA AA (32 bits; last preamble byte absorbed into sync)
+ * - Sync word:              0xAA, 0x2D (last physical sync byte 0xD4 becomes first payload byte)
+ * - Packet mode:            Fixed length, 27 bytes (MSG_BUF_SIZE)
  * - CRC filtering:          Disabled
- * - Preamble:               0xAA, 0xAA, 0xAA, 0xAA (+ 0xAA from sync)
- * - Sync word:              0xAA, 0x2D (last sync byte 0xD4 received as first payload byte)
  * 
- * This example is configured for Adafruit Feather 32u4 RFM95
- * Pins:
- * - CS:  8
- * - RST: 4
- * - DIO0: 7
+ * Pin defaults (Adafruit Feather 32u4 RFM95):
+ * - CS:   8   (RADIO_CS)
+ * - RST:  4   (RADIO_RST)
+ * - DIO0: 7   (RADIO_DIO0)
+ * Other boards use LORA_CS / LORA_RST / LORA_IRQ from their BSP.
  */
 
 #include <Arduino.h>
 
+// Enable SX1276 debug prints for deeper runtime diagnostics
+// (keeps output verbose; remove or comment out when no longer needed)
+#define SX1276_DEBUG
 // Note: FSK/OOK mode is enabled by default in the library
 #include "SX1276.h"
 
@@ -39,70 +44,95 @@
 #define RADIO_DIO0  LORA_IRQ
 #endif
 
-// Radio frequency (868.3 MHz for Bresser sensors)
-#define RADIO_FREQ  868300000L
+// Fixed packet length for Bresser sensors (matches MSG_BUF_SIZE in WeatherSensor.h)
+#define PACKET_LENGTH   27
 
-// Fixed packet length for Bresser sensors
-#define PACKET_LENGTH 27
+// SX1276 instance — use pin constructor so beginFSK() can be called directly
+// Parameter order: (cs, irq/DIO0, rst)
+SX1276 radio(RADIO_CS, RADIO_DIO0, RADIO_RST);
 
-// Create SX1276 instance
-SX1276 radio;
+// Flag set by the DIO0 interrupt when a complete packet has been written to the FIFO
+static volatile bool receivedFlag = false;
+
+// Interrupt service routine — must reside in IRAM on ESP32/ESP8266
+#if defined(ESP8266) || defined(ESP32)
+IRAM_ATTR
+#endif
+void setFlag(void) {
+    receivedFlag = true;
+}
 
 void setup() {
   Serial.begin(115200);
   while (!Serial && millis() < 5000) {
     ; // Wait for Serial to be ready (or 5 seconds timeout)
   }
+  // Give the serial monitor a moment to attach after reset
+  delay(10000);
   
   Serial.println(F("Bresser Weather Sensor Receiver"));
   Serial.println(F("Initializing..."));
   
-  // Initialize the radio
-  int16_t state = radio.begin(RADIO_FREQ, RADIO_CS, RADIO_RST, RADIO_DIO0);
-  
+  // -----------------------------------------------------------------------
+  // Initialize radio in FSK mode — mirrors WeatherSensor.cpp for SX1276:
+  //   radio.beginFSK(frequency, 8.21, 57.136417, 250, 10, 32)
+  // Parameters: freq[MHz], bitrate[kbps], freqDev[kHz], rxBw[kHz], power[dBm], preamble[bits]
+  // -----------------------------------------------------------------------
+  int16_t state = radio.beginFSK(868.3, 8.21, 57.136417, 250.0, 10, 32);
   if (state == SX1276_ERR_NONE) {
-    Serial.println(F("Radio initialized successfully!"));
+    Serial.println(F("Radio initialized (FSK) successfully!"));
   } else {
-    Serial.print(F("Failed to initialize radio, error code: "));
+    Serial.print(F("beginFSK() failed, error: "));
     Serial.println(state);
-    while (true) {
-      delay(1000);
-    }
+    while (true) { delay(1000); }
   }
-  
-  // Set modulation to FSK
-  state = radio.setModulation(SX1276_MODULATION_FSK);
+
+  // Fixed packet length, CRC disabled — mirrors fixedPacketLengthMode(27) + setCrcFiltering(false)
+  state = radio.setPacketConfig(true, false);
   if (state != SX1276_ERR_NONE) {
-    Serial.print(F("Failed to set FSK modulation, error code: "));
+    Serial.print(F("setPacketConfig() failed, error: "));
     Serial.println(state);
-    while (true) {
-      delay(1000);
-    }
+    while (true) { delay(1000); }
   }
-  
-  // Configure FSK parameters for Bresser sensors
-  radio.setBitrate(8210);                          // 8.21 kbps
-  radio.setFrequencyDeviation(57136);              // 57.136 kHz (closest to 57.136417 kHz)
-  radio.setRxBandwidth(SX1276_RX_BW_250_0_KHZ_FSK); // 250 kHz bandwidth
-  radio.writeRegister(SX1276_REG_AFC_BW, SX1276_RX_BW_250_0_KHZ_FSK); // keep AFC BW in sync with RX BW
-  radio.setPower(10, true);                        // 10 dBm with PA_BOOST
-  
-  // Set sync word (2 bytes: 0xAA, 0x2D)
-  // Note: Bresser preamble is AA AA AA AA AA (40 bits) with sync 2D D4
-  // We use 32-bit preamble + sync AA 2D, so last sync byte 0xD4 appears as first payload byte
-  uint8_t syncWord[] = {0xAA, 0x2D};
-  radio.setSyncWord(syncWord, 2);
-  
-  // Set preamble length (4 bytes = 32 bits)
-  radio.setPreambleLength(4);
-  
-  // Set packet format (fixed length, CRC disabled)
-  radio.setPacketConfig(true, false);
-  
-  // Set fixed payload length to 27 bytes
   radio.writeRegister(SX1276_REG_PAYLOAD_LENGTH_FSK, PACKET_LENGTH);
-  
+
+  // Sync word: 0xAA 0x2D
+  // Physical frame: AA AA AA AA AA | 2D D4 | <26 payload bytes>
+  // Preamble (32 bits = 4 bytes of 0xAA) + sync {0xAA, 0x2D} consumes the 5th preamble byte;
+  // the last physical sync byte 0xD4 therefore arrives as the first byte of the payload.
+  uint8_t syncWord[] = {0xAA, 0x2D};
+  state = radio.setSyncWord(syncWord, 2);
+  if (state != SX1276_ERR_NONE) {
+    Serial.print(F("setSyncWord() failed, error: "));
+    Serial.println(state);
+    while (true) { delay(1000); }
+  }
+
   Serial.println(F("FSK configuration complete"));
+  
+  // Dump key registers for debugging
+  Serial.println(F("Register dump (selected):"));
+  uint8_t regs[] = {
+    SX1276_REG_OP_MODE,
+    SX1276_REG_BITRATE_MSB, SX1276_REG_BITRATE_LSB,
+    SX1276_REG_FDEV_MSB, SX1276_REG_FDEV_LSB,
+    SX1276_REG_RX_BW, SX1276_REG_AFC_BW,
+    SX1276_REG_PREAMBLE_MSB_FSK, SX1276_REG_PREAMBLE_LSB_FSK,
+    SX1276_REG_SYNC_CONFIG, SX1276_REG_SYNC_VALUE_1, SX1276_REG_SYNC_VALUE_2,
+    SX1276_REG_PACKET_CONFIG_1, SX1276_REG_PAYLOAD_LENGTH_FSK,
+    SX1276_REG_IRQ_FLAGS_1, SX1276_REG_IRQ_FLAGS_2,
+    SX1276_REG_RSSI_VALUE_FSK
+  };
+  for (size_t i = 0; i < sizeof(regs); i++) {
+    uint8_t v = radio.readRegister(regs[i]);
+    Serial.print(F("0x"));
+    if (regs[i] < 0x10) Serial.print('0');
+    Serial.print(regs[i], HEX);
+    Serial.print(F(": 0x"));
+    if (v < 0x10) Serial.print('0');
+    Serial.println(v, HEX);
+  }
+  Serial.println();
   
   // Verify we're in FSK mode by reading OP_MODE register
   uint8_t opMode = radio.readRegister(SX1276_REG_OP_MODE);
@@ -120,7 +150,8 @@ void setup() {
   Serial.print(F("PACKET_CONFIG_1: 0x"));
   Serial.print(pktConfig1, HEX);
   Serial.print(F(" (Fixed="));
-  Serial.print((pktConfig1 & 0x80) ? F("Yes") : F("No"));
+  // PacketFormat bit 7: 0 = fixed length, 1 = variable length
+  Serial.print((pktConfig1 & 0x80) ? F("No") : F("Yes"));
   Serial.print(F(", CRC="));
   Serial.print((pktConfig1 & 0x10) ? F("On") : F("Off"));
   Serial.println(F(")"));
@@ -136,70 +167,88 @@ void setup() {
   Serial.println(F("  Packet length:    27 bytes (fixed)"));
   Serial.println(F("  Sync word:        0xAA 0x2D"));
   Serial.println();
-  Serial.println(F("Listening for Bresser sensor packets..."));
-  Serial.println(F("(Only Bresser frames starting with 0xD4 will be displayed)"));
-  Serial.println(F("(Timeout prints '.' every 10 seconds if no packets)"));
+
+  // Start interrupt-driven reception — mirrors WeatherSensor::begin() pattern:
+  //   radio.setPacketReceivedAction(setFlag);
+  //   radio.startReceive();
+  radio.setPacketReceivedAction(setFlag);
+  state = radio.startReceive();
+  if (state != SX1276_ERR_NONE) {
+    Serial.print(F("startReceive() failed, error: "));
+    Serial.println(state);
+    while (true) { delay(1000); }
+  }
+
+  Serial.println(F("Listening for Bresser sensor packets (interrupt-driven)..."));
+  Serial.println(F("(Only frames with first byte 0xD4 are displayed)"));
+  Serial.println(F("(Heartbeat '.' printed every 10 s while waiting)"));
   Serial.println();
-  Serial.flush();  // Ensure all output is sent
+  Serial.flush();
 }
 
 void loop() {
+  static uint32_t lastDot = 0;
+
+  if (!receivedFlag) {
+    // No packet yet — print a heartbeat dot every 10 s
+    if (millis() - lastDot >= 10000) {
+      Serial.print('.');
+      Serial.flush();
+      lastDot = millis();
+    }
+    return;
+  }
+
+  // -----------------------------------------------------------------------
+  // Packet received — mirrors WeatherSensor::getMessage() for SX1276:
+  //   receivedFlag = false;
+  //   radio.readData(recvData, MSG_BUF_SIZE);
+  //   rssi = radio.getRSSI();
+  //   radio.startReceive();
+  //   if (recvData[0] == 0xD4) { ... }
+  // -----------------------------------------------------------------------
+  receivedFlag = false;
+
   uint8_t buffer[PACKET_LENGTH];
-  
-  // Receive packet (blocks with 10 second timeout)
-  // Note: If you see dots appearing, the radio is working but not receiving valid packets
-  int16_t state = radio.receive(buffer, sizeof(buffer));
-  
+  int16_t state = radio.readData(buffer, sizeof(buffer));
+  int16_t rssi  = radio.getRSSI_FSK();
+
+  // Restart reception immediately so we don't miss the next packet
+  radio.startReceive();
+
   if (state > 0) {
-    // Successfully received a packet
-    
-    // Check if it starts with 0xD4 (Bresser frame marker)
-    bool isBresser = (buffer[0] == 0xD4);
-    
-    // Only process and display Bresser packets (first byte must be 0xD4)
-    if (isBresser) {
-      // Get signal quality metrics before displaying packet
-      int16_t rssi = radio.getRSSI_FSK();
-      
-      // Debug: Read raw RSSI register to verify
-      uint8_t rawRSSI = radio.readRegister(SX1276_REG_RSSI_VALUE_FSK);
-      uint8_t irqFlags1 = radio.readRegister(SX1276_REG_IRQ_FLAGS_1);
-      
+    // Verify first byte is 0xD4 — the last physical sync byte that arrives
+    // as the first payload byte (see setSyncWord comment above).
+    // Mirrors: if (recvData[0] == 0xD4) in WeatherSensor::getMessage()
+    if (buffer[0] == 0xD4) {
       Serial.println(F("========================================"));
       Serial.print(F("Received BRESSER packet ("));
       Serial.print(state);
       Serial.println(F(" bytes):"));
-      
-      // Print packet data in hex format
+
       Serial.print(F("Data: "));
       for (int i = 0; i < state; i++) {
-        if (buffer[i] < 16) Serial.print('0');
+        if (buffer[i] < 0x10) Serial.print('0');
         Serial.print(buffer[i], HEX);
         Serial.print(' ');
       }
       Serial.println();
-      
-      // Display signal quality metrics
+
       Serial.print(F("RSSI: "));
       Serial.print(rssi);
-      Serial.print(F(" dBm (raw: 0x"));
-      Serial.print(rawRSSI, HEX);
-      Serial.print(F(", IRQ1: 0x"));
-      Serial.print(irqFlags1, HEX);
-      Serial.println(F(")"));
-      
+      Serial.println(F(" dBm"));
+
       Serial.println(F("========================================"));
       Serial.println();
     }
-    // else: Silently ignore non-Bresser packets
-    
+    // else: start byte != 0xD4 — silently discard
+
   } else if (state == SX1276_ERR_RX_TIMEOUT) {
-    // No packet received within timeout - print dot for heartbeat
+    // Should not occur with interrupt-driven RX, but guard just in case
     Serial.print('.');
-    Serial.flush();  // Ensure dot is displayed immediately
-    
+    Serial.flush();
   } else {
-    // Other error
+    // Reception error
     Serial.println();
     Serial.print(F("Reception error: "));
     Serial.println(state);
