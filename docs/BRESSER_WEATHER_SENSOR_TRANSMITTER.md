@@ -68,7 +68,8 @@ buffer[19..26] = 0x00  (padding, ignored by decoder)
 
 **Copilot:**
 
-Updated `.vscode/arduino.json` to point to the transmitter sketch:
+To use the predefined VS Code workflow, create or update your local `.vscode/arduino.json`
+to point to the transmitter sketch, for example:
 
 ```json
 {
