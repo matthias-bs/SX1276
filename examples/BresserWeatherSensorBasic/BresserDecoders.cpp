@@ -308,10 +308,11 @@ DecodeStatus decode7In1(const uint8_t *msg, uint8_t msgSize,
     if ((chkdgst ^ digest) != 0x6DF1)
         return DECODE_DIG_ERR;
 
-    int     id_tmp     = (msgw[2] << 8) | msgw[3];
-    int     s_type     = msg[6] >> 4; // raw (no de-whitening), matches original
-    int     flags      = msgw[15] & 0x0F;
-    bool    batt_low   = (flags & 0x06) == 0x06;
+    // 7-in-1 sensor ID is 16-bit (matches reference WeatherSensorDecoders.cpp).
+    uint16_t id_tmp    = (uint16_t)(((unsigned)msgw[2] << 8) | msgw[3]);
+    int      s_type    = msg[6] >> 4; // raw (no de-whitening), matches original
+    int      flags     = msgw[15] & 0x0F;
+    bool     batt_low  = (flags & 0x06) == 0x06;
 
     out->sensor_id  = (uint32_t)id_tmp;
     out->s_type     = (uint8_t)s_type;
@@ -415,14 +416,15 @@ DecodeStatus decodeLightning(const uint8_t *msg, uint8_t msgSize,
     if ((chk ^ digest) != 0x899E)
         return DECODE_DIG_ERR;
 
-    int     id_tmp     = (msgw[2] << 8) | msgw[3];
-    int     s_type     = msg[6] >> 4;
-    bool    startup    = (msg[6] & 0x08) == 0x00;
+    // Lightning sensor ID is 16-bit (matches reference WeatherSensorDecoders.cpp).
+    uint16_t id_tmp    = (uint16_t)(((unsigned)msgw[2] << 8) | msgw[3]);
+    int      s_type    = msg[6] >> 4;
+    bool     startup   = (msg[6] & 0x08) == 0x00;
     uint16_t ctr       = (msgw[4] >> 4) * 100 + (msgw[4] & 0x0F) * 10 + (msgw[5] >> 4);
-    bool    batt_low   = (msgw[5] & 0x08) == 0x00;
-    uint16_t unknown1  = ((msgw[5] & 0x0F) << 8) | msgw[6];
+    bool     batt_low  = (msgw[5] & 0x08) == 0x00;
+    uint16_t unknown1  = (uint16_t)(((unsigned)(msgw[5] & 0x0F) << 8) | msgw[6]);
     uint8_t  dist_km   = msgw[7];
-    uint16_t unknown2  = (msgw[8] << 8) | msgw[9];
+    uint16_t unknown2  = (uint16_t)(((unsigned)msgw[8] << 8) | msgw[9]);
 
     out->sensor_id       = (uint32_t)id_tmp;
     out->s_type          = (uint8_t)s_type;
