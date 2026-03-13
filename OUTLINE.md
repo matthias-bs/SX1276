@@ -13,3 +13,4 @@ This lightweight radio library (SX1276_Radio_Lite) is designed with the followin
 - The new SX1276 class shall be compatible with RadioLib.
 - Include the LoRa modulation as an option (enabled with a define)
 - Implement a simple interface to the Arduino SPI and pin functions.
+- Allow interrupt-based transmission and reception using `radio.setPacketReceivedAction()`
