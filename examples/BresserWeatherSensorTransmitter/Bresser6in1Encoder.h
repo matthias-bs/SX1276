@@ -47,7 +47,7 @@
 
 #include <Arduino.h>
 
-// Size of the 6-in-1 encoded block (bytes 0-17 of the 26-byte Bresser payload)
+// Size of the 18-byte 6-in-1 message (bytes 0-17 of the 26 bytes after the 0xD4 marker)
 #define BRESSER_6IN1_MSG_SIZE 18
 
 /**
