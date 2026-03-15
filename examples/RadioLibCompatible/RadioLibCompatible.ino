@@ -22,6 +22,8 @@
 #define LORA_IRQ   7   // DIO0 interrupt
 #define LORA_RST   4   // Reset
 
+#define LORA_FREQ 868.0F
+
 // Create SX1276 instance with RadioLib-compatible constructor
 SX1276 radio(LORA_CS, LORA_IRQ, LORA_RST);
 
@@ -37,12 +39,11 @@ void setup() {
   // RadioLib-compatible begin() with defaults
   // begin(freq, bw, sf, cr, syncWord, power, preambleLength, gain)
   // All parameters after freq are optional with sensible defaults
-  int16_t state = radio.begin(915.0);  // Just frequency in MHz
-  
+  int16_t state = radio.begin(LORA_FREQ);  // Just frequency in MHz
   // Or with full parameters like RadioLib:
-  // int16_t state = radio.begin(915.0, 125.0, 9, 7, 0x12, 10, 8, 0);
+  // int16_t state = radio.begin(LORA_FREQ, 125.0, 9, 7, 0x12, 10, 8, 0);
   // Parameters:
-  //   freq = 915.0 MHz
+  //   freq = 868.0/915.0 MHz
   //   bw = 125.0 kHz bandwidth
   //   sf = 9 spreading factor
   //   cr = 7 coding rate (4/7)
@@ -54,7 +55,7 @@ void setup() {
   if (state == SX1276_ERR_NONE) {
     Serial.println(F("Radio initialized successfully!"));
     Serial.println(F("Configuration:"));
-    Serial.println(F("  Frequency: 915.0 MHz"));
+    Serial.print(F("  Frequency: ")); Serial.print(LORA_FREQ);Serial.println(" MHz");
     Serial.println(F("  Bandwidth: 125.0 kHz"));
     Serial.println(F("  Spreading Factor: 9"));
     Serial.println(F("  Coding Rate: 4/7"));
@@ -78,29 +79,37 @@ void loop() {
   static uint32_t counter = 0;
   char message[50];
   snprintf(message, sizeof(message), "RadioLib-style #%lu", counter++);
-  
+
+  // Add random delay to prevent lock-up between devices
+  // Random delay between 0 and 1000 ms
+  uint16_t randomDelay = random(0, 1000);
+  Serial.print(F("Random delay before transmit: "));
+  Serial.print(randomDelay);
+  Serial.println(F(" ms"));
+  delay(randomDelay);
+
   Serial.print(F("Transmitting: "));
   Serial.println(message);
-  
+
   // Transmit the message
   // Note: RadioLib uses String, we use byte array for efficiency
   int16_t state = radio.transmit((uint8_t*)message, strlen(message));
-  
+
   if (state == SX1276_ERR_NONE) {
     Serial.println(F("Transmission successful!"));
   } else {
     Serial.print(F("Transmission failed, error code: "));
     Serial.println(state);
   }
-  
-  delay(5000);
-  
-  // Optional: Try to receive
+
+  // Listen immediately after transmitting so the response is not missed.
+  // The PingPong peer responds within ~1 second; waiting 5 s before opening
+  // the receive window caused the response to always be missed.
   Serial.println(F("Listening for packets..."));
-  
+
   uint8_t buffer[255];
   state = radio.receive(buffer, sizeof(buffer));
-  
+
   if (state > 0) {
     // Received a packet
     Serial.print(F("Received: "));
@@ -108,11 +117,11 @@ void loop() {
       Serial.write(buffer[i]);
     }
     Serial.println();
-    
+
     // Get signal quality (RadioLib-compatible methods)
     int16_t rssi = radio.getRSSI();
     int8_t snr = radio.getSNR();
-    
+
     Serial.print(F("RSSI: "));
     Serial.print(rssi);
     Serial.print(F(" dBm, SNR: "));
@@ -121,6 +130,9 @@ void loop() {
   } else if (state == SX1276_ERR_RX_TIMEOUT) {
     Serial.println(F("No packet received"));
   }
-  
+
+  // Wait before the next transmit cycle
+  delay(5000);
+
   Serial.println();
 }
