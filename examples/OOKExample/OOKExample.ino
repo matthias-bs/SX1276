@@ -12,7 +12,10 @@
  *   - Variable-length packets, CRC enabled
  * 
  * EU compliance note: 868 MHz SRD band (868.0–868.6 MHz) permits OOK at
- * max 25 mW ERP with a 1% duty cycle. Observe duty cycle limits in testing.
+ * max 25 mW ERP with a 1% duty cycle (ETSI EN 300 220).  This sketch
+ * enforces a minimum TX interval (TX_MIN_INTERVAL_MS) to stay below 1%.
+ * Parameters that affect the duty cycle: bitrate (setBitrate), preamble
+ * length (setPreambleLength), payload size, and TX_MIN_INTERVAL_MS.
  * 
  * RadioLib counterpart: extras/SX127x_OOK_Modem/SX127x_OOK_Modem.ino
  * 
@@ -130,6 +133,19 @@ void setup() {
 }
 
 void loop() {
+  // Enforce 1% duty cycle (EU 868 MHz sub-band g1, ETSI EN 300 220).
+  // TX_MIN_INTERVAL_MS >= airtime / 0.01.  At 4.8 kbps with 80-bit preamble,
+  // a ~30-byte frame (preamble+sync+len+payload+CRC) takes ~50 ms on air;
+  // 6 s interval -> 0.83% duty cycle, well within the 1% limit.
+  static const uint32_t TX_MIN_INTERVAL_MS = 6000;
+  static uint32_t lastTxEnd = 0;
+  if (lastTxEnd != 0) {
+    uint32_t elapsed = millis() - lastTxEnd;
+    if (elapsed < TX_MIN_INTERVAL_MS) {
+      delay(TX_MIN_INTERVAL_MS - elapsed);
+    }
+  }
+
   // Prepare message
   static uint32_t counter = 0;
   char message[50];
@@ -147,7 +163,8 @@ void loop() {
     Serial.print(F("Transmission failed, error code: "));
     Serial.println(state);
   }
-  
+  lastTxEnd = millis();
+
   // Wait before entering the receive window.  A random jitter (0–2000 ms) on
   // top of the fixed 2 s gap prevents two identically-configured boards from
   // phase-locking their TX/RX cycles and permanently missing each other.

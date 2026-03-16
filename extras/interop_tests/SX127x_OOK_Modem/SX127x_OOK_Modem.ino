@@ -10,7 +10,10 @@
  *   - Variable-length packets, CRC enabled
  *
  * EU compliance note: 868 MHz SRD band (868.0–868.6 MHz) permits OOK at
- * max 25 mW ERP with a 1% duty cycle. Observe duty cycle limits in testing.
+ * max 25 mW ERP with a 1% duty cycle (ETSI EN 300 220).  This sketch
+ * enforces a minimum TX interval (TX_MIN_INTERVAL_MS) to stay below 1%.
+ * Parameters that affect the duty cycle: bitrate (beginFSK), preamble
+ * length (beginFSK), payload size, and TX_MIN_INTERVAL_MS.
  *
  * Receive notes:
  *   The receive loop uses startReceive() rather than the blocking receive() so
@@ -191,6 +194,19 @@ static int16_t receiveWithDiagnostics(uint32_t timeoutMs,
 }
 
 void loop() {
+  // Enforce 1% duty cycle (EU 868 MHz sub-band g1, ETSI EN 300 220).
+  // TX_MIN_INTERVAL_MS >= airtime / 0.01.  At 4.8 kbps with 80-bit preamble,
+  // a ~30-byte frame (preamble+sync+len+payload+CRC) takes ~50 ms on air;
+  // 6 s interval -> 0.83% duty cycle, well within the 1% limit.
+  static const uint32_t TX_MIN_INTERVAL_MS = 6000;
+  static uint32_t lastTxEnd = 0;
+  if (lastTxEnd != 0) {
+    uint32_t elapsed = millis() - lastTxEnd;
+    if (elapsed < TX_MIN_INTERVAL_MS) {
+      delay(TX_MIN_INTERVAL_MS - elapsed);
+    }
+  }
+
   // --- Transmit ---
   char message[50];
   snprintf(message, sizeof(message), "OOK msg #%lu", counter++);
@@ -205,6 +221,7 @@ void loop() {
     Serial.print(F("[SX1276] Transmission failed, code "));
     Serial.println(state);
   }
+  lastTxEnd = millis();
 
   // Enter RX immediately — OOKExample's response arrives within ~10 ms.
 
