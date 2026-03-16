@@ -66,7 +66,7 @@ RadioLib test board: [Lilygo T3 LoRa32 V1.6.1](https://lilygo.cc/en-us/products/
 | ReceiveExample            | [SX127x_Transmit_Interrupt.ino](../extras/interop_tests/SX127x_Transmit_Interrupt/SX127x_Transmit_Interrupt.ino)  | ✅     |       |
 | RadioLibCompatible        | [SX127x_PingPong.ino](../extras/interop_tests/SX127x_PingPong/SX127x_PingPong.ino)                                      | ✅     |       |
 | FSKExample                | [SX127x_FSK_Modem](../extras/SX127x_FSK_Modem/SX127x_FSK_Modem.ino)                                                      |        |       |
-| OOKExample                | [SX127x_OOK_Modem.ino](../extras/SX127x_OOK_Modem/SX127x_OOK_Modem.ino)                                                      |        |       |
+| OOKExample                | [SX127x_OOK_Modem.ino](../extras/SX127x_OOK_Modem/SX127x_OOK_Modem.ino)                                                      | ✅     |       |
 
 <!-- Fill in the Actual RadioLib Sketch Used, Result, and Notes columns during testing -->
 
