@@ -1,8 +1,20 @@
 /*
  * OOKExample.ino
  * 
- * OOK (On-Off Keying) example for SX1276_Radio_Lite library
- * Demonstrates OOK transmission and reception
+ * OOK (On-Off Keying) example for SX1276_Radio_Lite library.
+ * Compatible with the RadioLib counterpart in extras/SX127x_OOK_Modem/.
+ * 
+ * Parameters:
+ *   - OOK modulation, 868 MHz (EU 868 MHz SRD band), 4.8 kbps
+ *   - Sync word: 0x12, 0xAD
+ *   - Preamble: 80 bits (10 bytes) — extended to allow the OOK peak threshold
+ *     detector on the receiver side to converge before the sync word arrives
+ *   - Variable-length packets, CRC enabled
+ * 
+ * EU compliance note: 868 MHz SRD band (868.0–868.6 MHz) permits OOK at
+ * max 25 mW ERP with a 1% duty cycle. Observe duty cycle limits in testing.
+ * 
+ * RadioLib counterpart: extras/SX127x_OOK_Modem/SX127x_OOK_Modem.ino
  * 
  * This example is configured for Adafruit Feather 32u4 RFM95
  * Pins:
@@ -17,13 +29,19 @@
 // (No need to define FSK_OOK_ENABLED unless you've disabled it in SX1276.h)
 #include <SX1276.h>
 
+#if defined(ARDUINO_AVR_FEATHER32U4)
 // Pin definitions for Adafruit Feather 32u4 RFM95
 #define RADIO_CS    8
 #define RADIO_RST   4
 #define RADIO_DIO0  7
+#else
+#define RADIO_CS    LORA_CS
+#define RADIO_RST   LORA_RST
+#define RADIO_DIO0  LORA_IRQ
+#endif
 
-// Radio frequency (433 MHz is common for OOK applications)
-#define RADIO_FREQ  433000000L
+// Radio frequency — 868 MHz SRD band (EU)
+#define RADIO_FREQ  868000000L
 
 // Create SX1276 instance
 SX1276 radio;
@@ -34,7 +52,7 @@ void setup() {
     ; // Wait for Serial to be ready (or 5 seconds timeout)
   }
   
-  Serial.println(F("SX1276_Radio_Lite - OOK Example"));
+  Serial.println(F("SX1276_Radio_Lite - OOK Example (868 MHz)"));
   Serial.println(F("Initializing..."));
   
   // Initialize the radio
@@ -50,7 +68,7 @@ void setup() {
     }
   }
   
-  // Set modulation to OOK
+  // Set OOK modulation — RadioLib counterpart uses setOOK(true)
   state = radio.setModulation(SX1276_MODULATION_OOK);
   if (state != SX1276_ERR_NONE) {
     Serial.print(F("Failed to set OOK modulation, error code: "));
@@ -60,9 +78,10 @@ void setup() {
     }
   }
   
-  // Configure OOK parameters
-  radio.setBitrate(4800);                          // 4.8 kbps
-  int16_t fdState = radio.setFrequencyDeviation(0); // 0 Hz deviation (OOK)
+  // Configure OOK parameters to match extras/SX127x_OOK_Modem/SX127x_OOK_Modem.ino:
+  //   beginFSK(868.0, 4.8, 5.0, 10.4) + setOOK(true) on the RadioLib side
+  radio.setBitrate(4800);                              // 4.8 kbps
+  int16_t fdState = radio.setFrequencyDeviation(0);    // 0 Hz deviation (OOK)
   if (fdState != SX1276_ERR_NONE) {
     Serial.print(F("Failed to set frequency deviation, error code: "));
     Serial.println(fdState);
@@ -70,20 +89,43 @@ void setup() {
       delay(1000);
     }
   }
-  radio.setRxBandwidth(SX1276_RX_BW_10_4_KHZ_FSK); // 10.4 kHz bandwidth
+  radio.setRxBandwidth(SX1276_RX_BW_10_4_KHZ_FSK);   // 10.4 kHz bandwidth
   radio.setPower(17, true);                        // 17 dBm with PA_BOOST
   
-  // Set sync word (2 bytes)
-  uint8_t syncWord[] = {0x69, 0x81};
+  // Sync word — must match RadioLib counterpart:
+  //   uint8_t syncWord[] = {0x12, 0xAD}; radio.setSyncWord(syncWord, 2);
+  uint8_t syncWord[] = {0x12, 0xAD};
   radio.setSyncWord(syncWord, 2);
   
-  // Set preamble length (5 bytes = 40 bits, min 3 bytes for preamble detector)
-  radio.setPreambleLength(5);
+  // Set preamble length: 80 bits (10 bytes).
+  // Doubling from the minimum (40 bits) ensures the OOK envelope peak detector
+  // on the receiver side has enough on/off cycles to converge before the sync word.
+  radio.setPreambleLength(80);
   
   // Set packet format (variable length, CRC enabled)
   radio.setPacketConfig(false, true);
-  
-  Serial.println(F("OOK configuration complete"));
+
+  // Slow OOK peak threshold decay to once per 8 chips (matches SX127x_OOK_Modem).
+  // The SX1276 OOK peak detector tracks the signal envelope.  At the chip default
+  // (DEC_1_1_CHIP = once per chip) the threshold decays as fast as it rises, so it
+  // oscillates during the "0" half of preamble pulses and the detector loses lock
+  // before the sync word arrives.  Slowing the decay (DEC_1_8_CHIP) keeps the
+  // threshold near the true signal peak during "0" intervals, giving the detector a
+  // stable decision boundary throughout the 80-bit preamble.
+  //
+  // REG_OOK_AVG (0x16) bits[7:5]: OokPeakThreshDec
+  //   000 = 1/1 chip  (default — too fast for stable detection)
+  //   011 = 1/8 chip  (matches RadioLib's RADIOLIB_SX127X_OOK_PEAK_THRESH_DEC_1_8_CHIP)
+  {
+    uint8_t reg = radio.readRegister(SX1276_REG_OOK_AVG);
+    radio.writeRegister(SX1276_REG_OOK_AVG, (reg & 0x1F) | 0x60);  // DEC_1_8_CHIP
+  }
+
+  // Seed the PRNG from the free-running timer so two identically-flashed boards
+  // start with different random offsets and do not phase-lock their loops.
+  randomSeed(micros());
+
+  Serial.println(F("OOK configuration complete (868 MHz)"));
   Serial.println(F("Starting transmission..."));
 }
 
@@ -106,9 +148,11 @@ void loop() {
     Serial.println(state);
   }
   
-  // Wait a bit before next transmission
-  delay(3000);
-  
+  // Wait before entering the receive window.  A random jitter (0–2000 ms) on
+  // top of the fixed 2 s gap prevents two identically-configured boards from
+  // phase-locking their TX/RX cycles and permanently missing each other.
+  delay(2000 + random(0, 2000));
+
   // Try to receive for a short period
   Serial.println(F("Listening for packets..."));
   
