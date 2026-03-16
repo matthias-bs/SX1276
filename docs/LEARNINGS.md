@@ -173,3 +173,35 @@ within the ETSI EN 300 220 limit of 1 % per hour for the 868 MHz SRD band.
 
 For close-range bench testing, reduce the power to **+2 dBm** (change the 5th argument
 of `beginFSK()`) and use a 50 Ω dummy load instead of an antenna.
+
+---
+
+## L-005 — Random delay to avoid synchronization lock-up between nodes
+
+**Date:** 2026-03-15  
+**Files:** `examples/RadioLibCompatible/RadioLibCompatible.ino`, `extras/interop_tests/SX127x_PingPong/SX127x_PingPong.ino`
+
+### Symptom
+
+When two nodes (devices) both wait for a packet and then transmit at the same time, they can become locked in a state where neither receives the other's packet. This is especially common in simple ping-pong or request-response schemes without a central coordinator.
+
+### Root cause
+
+Both nodes synchronize their transmit/receive cycles, so their receive windows never overlap with the peer's transmission. This results in missed packets and failed communication.
+
+### Fix — Add random delay before transmission
+
+Insert a random delay before each transmission to break the symmetry. This ensures that the transmit/receive windows are not perfectly aligned, allowing packets to be received reliably.
+
+#### Example (Arduino)
+
+```cpp
+// Add random delay before transmit
+uint16_t randomDelay = random(0, 1000); // 0–1000 ms
+delay(randomDelay);
+```
+
+### Result
+
+With the random delay, nodes reliably receive each other's packets, even in ping-pong tests. This scheme is simple and effective for small networks or test setups.
+
