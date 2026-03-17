@@ -1441,10 +1441,10 @@ int16_t SX1276::configFSK() {
     // Bit 7: RestartRxOnCollision = 0 (off)
     // Bit 6: RestartRxWithoutPLLLock = 0
     // Bit 5: RestartRxWithPLLLock = 0
-    // Bit 4: AfcAutoOn = 0 (off initially, can be enabled if needed)
+    // Bit 4: AfcAutoOn = 1 (AFC enabled)
     // Bit 3: AgcAutoOn = 1 (AGC auto on)
-    // Bits 2-0: AfcAgcTrigger = 001 (RSSI interrupt)
-    writeRegister(SX1276_REG_RX_CONFIG, 0x08 | 0x01);  // AGC auto + RSSI trigger
+    // Bits 2-0: AfcAgcTrigger = 110 (PreambleDetect trigger)
+    writeRegister(SX1276_REG_RX_CONFIG, 0x10 | 0x08 | 0x06);  // AFC+AGC auto, PreambleDetect trigger (0x1E)
     
     // Reset FIFO overrun flag
     writeRegister(SX1276_REG_IRQ_FLAGS_2, SX1276_IRQ2_FIFO_OVERRUN);
