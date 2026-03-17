@@ -37,10 +37,14 @@
 #define RADIO_CS    8
 #define RADIO_RST   4
 #define RADIO_DIO0  7
-#else
+#elif defined(ARDUINO_TTGO_LoRa32_v21new)
 #define RADIO_CS    LORA_CS
 #define RADIO_RST   LORA_RST
 #define RADIO_DIO0  LORA_IRQ
+#else
+#if !defined(LORA_CS) || !defined(LORA_RST) || !defined(LORA_IRQ)
+#error "Unsupported board: define RADIO_CS/RADIO_RST/RADIO_DIO0 for this target."
+#endif
 #endif
 
 // Radio frequency — 868 MHz SRD band (EU)

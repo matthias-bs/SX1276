@@ -41,12 +41,18 @@
 
 #include <RadioLib.h>
 
+#if defined(ARDUINO_TTGO_LoRa32_v21new)
 // Pin definitions — resolved by the ESP32 Arduino board package
 // for the Lilygo T3 LoRa32 V1.6.1 board variant.
 #define RADIO_CS   LORA_CS
 #define RADIO_RST  LORA_RST
 #define RADIO_DIO0 LORA_IRQ
 #define RADIO_DIO1 LORA_D1
+#else
+#if !defined(LORA_CS) || !defined(LORA_RST) || !defined(LORA_IRQ)
+#error "Unsupported board: define RADIO_CS/RADIO_RST/RADIO_DIO0 for this target."
+#endif
+#endif
 
 SX1276 radio = new Module(RADIO_CS, RADIO_DIO0, RADIO_RST, RADIO_DIO1);
 
