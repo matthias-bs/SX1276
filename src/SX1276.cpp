@@ -873,13 +873,6 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen, uint32_t timeout_ms) {
         }
         SX1276_DEBUG_PRINTLN();
         
-        // Clear IRQ flags before leaving (belt-and-suspenders; hardware already
-        // auto-cleared PayloadReady when the last FIFO byte was read, but any
-        // residual flags — e.g. SyncAddressMatch, RssiExceeds — are flushed here
-        // so startReceive() starts from a known-clean state.
-        writeRegister(SX1276_REG_IRQ_FLAGS_1, 0xFF);
-        writeRegister(SX1276_REG_IRQ_FLAGS_2, 0xFF);
-
         // Set back to standby
         standby();
         
@@ -1444,25 +1437,14 @@ int16_t SX1276::configFSK() {
     // Bits 2-0: RSSI smoothing (2 = 8 samples, default)
     writeRegister(SX1276_REG_RSSI_CONFIG, 0x02);  // 8 samples smoothing, 0 offset
     
-    // Configure RX_CONFIG: AFC auto on, AGC auto on, AFC/AGC trigger on preamble detect
+    // Configure RX_CONFIG: AGC auto on, AFC/AGC trigger on RSSI interrupt
     // Bit 7: RestartRxOnCollision = 0 (off)
     // Bit 6: RestartRxWithoutPLLLock = 0
     // Bit 5: RestartRxWithPLLLock = 0
-    // Bit 4: AfcAutoOn = 1 — AFC corrects crystal offset before sync detection.
-    //         Without this, ±10 ppm crystal tolerance at 868 MHz (up to 17.4 kHz
-    //         combined offset) shifts FSK symbols away from the correlator center,
-    //         causing sync word bit errors and SyncAddressMatch to never fire even
-    //         when the preamble pattern is detected.
+    // Bit 4: AfcAutoOn = 0 (off initially, can be enabled if needed)
     // Bit 3: AgcAutoOn = 1 (AGC auto on)
-    // Bits 2-0: AfcAgcTrigger = 110 (PreambleDetect) — AFC/AGC only fires when the
-    //           preamble detector (REG_PREAMBLE_DETECT below) recognises a valid
-    //           0x55 preamble pattern.  Using RSSI trigger (001) causes AFC to
-    //           start on thermal noise as soon as RX mode is entered (RSSI_THRESH
-    //           = 0xFF = -127.5 dBm fires immediately), locking onto a random
-    //           frequency before the packet arrives and killing sync detection.
-    //           PreambleDetect matches RadioLib's behaviour and raises packet
-    //           success rate from <5% to >90%.
-    writeRegister(SX1276_REG_RX_CONFIG, 0x08 | 0x10 | 0x06);  // AGC auto + AFC auto + PreambleDetect trigger
+    // Bits 2-0: AfcAgcTrigger = 001 (RSSI interrupt)
+    writeRegister(SX1276_REG_RX_CONFIG, 0x08 | 0x01);  // AGC auto + RSSI trigger
     
     // Reset FIFO overrun flag
     writeRegister(SX1276_REG_IRQ_FLAGS_2, SX1276_IRQ2_FIFO_OVERRUN);
