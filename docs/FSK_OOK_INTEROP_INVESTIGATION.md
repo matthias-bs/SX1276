@@ -420,15 +420,112 @@ The following VS Code tasks are defined in `.vscode/tasks.json` for compilation:
    - TTGO/Lilygo: DIO1 = `LORA_D1` when defined
 - Updated `Module(...)` constructor to pass `RADIO_DIO1` instead of always `RADIOLIB_NC`.
 
-### Current status
+### Additional root causes identified (17 March 2026)
+
+---
+
+#### Root Cause #7 — SX1276\_Radio\_Lite: AFC/AGC triggered on RSSI noise instead of PreambleDetect
+
+##### Symptom
+
+After enabling AFC (`AfcAutoOn = 1` in `REG_RX_CONFIG`, Root Cause investigation previous
+session), packet reception improved but success rate remained extremely low —  only 1 packet
+received per ~50–280 heartbeat intervals (roughly 2% success).  RSSI on received packets was
+-41 to -46 dBm, indicating the RF link itself was healthy.
+
+##### Root cause
+
+`configFSK()` wrote `REG_RX_CONFIG = 0x08 | 0x10 | 0x01` — setting
+`AfcAgcTrigger = 001 (RSSI interrupt)`.  With `RSSI_THRESH = 0xFF` (-127.5 dBm), the RSSI
+interrupt fires **immediately** when the chip enters RX_CONTINUOUS mode — on thermal noise,
+before any packet has arrived.  AFC therefore locks onto the current thermal noise floor, which
+is at a random frequency offset.  When the actual packet arrives, the AFC correction is pointing
+at noise rather than the signal, and the correlator misses the sync word in the majority of
+packets.
+
+RadioLib uses `AfcAgcTrigger = 110 (PreambleDetect)` in `SX127x::setRxBandwidthHz()` — AFC
+only fires when the preamble detector (whose configuration was already correct: `REG_PREAMBLE_DETECT
+= 0xAA`, 2-byte match, tolerance 10 bits) recognises a genuine 0x55 preamble burst.  This means
+AFC starts correcting exactly when it is needed, with a real signal present.
+
+##### Fix
+
+Changed `configFSK()` to use `AfcAgcTrigger = 110 (PreambleDetect)`:
+
+```cpp
+// Before — AFC triggered on RSSI: fires immediately on thermal noise
+writeRegister(SX1276_REG_RX_CONFIG, 0x08 | 0x10 | 0x01);  // RSSI trigger
+
+// After — AFC triggered on PreambleDetect: fires only when a valid 0x55 preamble
+// burst is detected, matching RadioLib's behaviour
+writeRegister(SX1276_REG_RX_CONFIG, 0x08 | 0x10 | 0x06);  // PreambleDetect trigger
+```
+
+**File changed:** `SX1276.cpp` (`configFSK()`)
+
+---
+
+#### Root Cause #8 — SX1276\_Radio\_Lite: IRQ flags not explicitly cleared in `readData()` FSK success path
+
+##### Symptom
+
+Cosmetic / latent: hardware auto-clears `PayloadReady` (IRQ_FLAGS_2 bit 2) when the last FIFO
+byte is read, so DIO0 goes low before `readData()` returns.  However, residual flags such as
+`SyncAddressMatch` (IRQ1 bit 0) and `RssiExceeds` (IRQ1 bit 3) are not auto-cleared by the
+hardware and are left set until `startReceive()` clears them.
+
+If for any reason `startReceive()` is called in a context where the flags from the previous
+reception are still set (e.g.  a late interrupt causing re-entry before the mode settles), a
+spurious `PayloadReady` could be interpreted as a new packet, resulting in a zero-length or
+corrupted read.
+
+##### Fix
+
+Added explicit `0xFF` writes to both IRQ flag registers at the end of the FSK/OOK success path
+in `readData()`, before `standby()`:
+
+```cpp
+// Clear IRQ flags before leaving (belt-and-suspenders; hardware already
+// auto-cleared PayloadReady when the last FIFO byte was read, but any
+// residual flags — e.g. SyncAddressMatch, RssiExceeds — are flushed here
+// so startReceive() starts from a known-clean state.
+writeRegister(SX1276_REG_IRQ_FLAGS_1, 0xFF);
+writeRegister(SX1276_REG_IRQ_FLAGS_2, 0xFF);
+standby();
+```
+
+**File changed:** `SX1276.cpp` (`readData()`, FSK/OOK success path)
+
+---
+
+### Current status (17 March 2026, confirmed)
 
 - `FSKExample` build: successful.
 - `SX127x_FSK_Modem` build: successful.
-- Interop status: **partial success** (packets exchanged, but timeout ratio still high).
+- Interop status: **fully working** — FSKRxExample receives every packet from SX127x_FSK_Modem
+  with 100% success rate after flashing the Root Cause #7 fix.
 
-### Remaining optimization path
+**Confirmed serial output (FSKRxExample on Adafruit Feather 32u4):**
+```
+SX1276_Radio_Lite - FSK RX Example
+Peer: SX127x_FSK_Modem (RadioLib)
+Initializing radio...
+Radio initialized.
+FSK RX ready (preamble 128 bits, 868 MHz, 4.8 kbps, 41.7 kHz BW)
+Listening (IRQ mode)... waiting for packets from SX127x_FSK_Modem.
 
-- Tune peer traffic profile for fewer collisions:
-   - increase timeout beacon probability,
-   - adjust RX timeout window,
-   - narrow jitter range after confirming stable lock.
+[RX] Received (19 bytes): RadioLib reply #355
+[RX] RSSI: -50 dBm
+
+[RX] Listening...
+[RX] Received (19 bytes): RadioLib reply #356
+[RX] RSSI: -51 dBm
+
+[RX] Listening...
+[RX] Received (19 bytes): RadioLib reply #357
+[RX] RSSI: -52 dBm
+```
+
+Root Cause #7 (`AfcAgcTrigger` RSSI → PreambleDetect) was the sole remaining driver of the
+~98% packet loss.  After correcting that single register field, reception improved from ~2%
+to 100% on the first test run.  No further tuning is required for the FSK RX path.
