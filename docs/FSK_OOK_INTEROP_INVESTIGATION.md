@@ -221,14 +221,152 @@ identically-flashed boards do not share the same PRNG sequence.
 
 ---
 
+## Root Cause #5 — FSK: Preamble polarity mismatch (0x55 vs 0xAA)
+
+### Symptom
+
+After fixing Root Causes #1–#4, OOK interop worked in both directions.  However,
+**FSK interop still failed completely** — both sides always timed out on every
+receive attempt, including across hundreds of TX/RX cycles.
+
+### Investigation — Runtime register dump
+
+Register dump diagnostics were added to both sketches at end of `setup()`, printing
+all 26 key FSK configuration registers.  IRQ flag diagnostics were also added to
+`FSKExample` to print `IRQ_FLAGS_1` and `IRQ_FLAGS_2` on each receive timeout.
+
+**Register comparison (runtime, post-setup):**
+
+| Register (addr) | FSK\_Modem (RadioLib) | FSKExample (SX1276\_Radio\_Lite) | Match? |
+|---|---|---|---|
+| `OP_MODE` (0x01) | `0x09` | `0x01` | ⚠️ bit 3 differs (LowFreqModeOn) |
+| `BITRATE` (0x02–03) | `0x1A0A` | `0x1A0A` | ✅ |
+| `FDEV` (0x04–05) | `0x0051` | `0x0051` | ✅ |
+| `FRF` (0x06–08) | `0xD90000` | `0xD90000` | ✅ |
+| `PA_CONFIG` (0x09) | `0xF8` (10 dBm) | `0x8F` (17 dBm) | ✅ expected |
+| `PA_RAMP` (0x0A) | `0x09` | `0x09` | ✅ |
+| `RX_CONFIG` (0x0D) | `0x09` | `0x09` | ✅ |
+| `RSSI_CONFIG` (0x0E) | `0x02` | `0x02` | ✅ |
+| `RSSI_THRESH` (0x10) | `0xFF` | `0xFF` | ✅ |
+| `RX_BW` (0x12) | `0x15` | `0x15` | ✅ |
+| `AFC_BW` (0x13) | `0x15` | `0x15` | ✅ |
+| `PREAMBLE_DETECT` (0x1F) | `0xAA` | `0xAA` | ✅ |
+| `PREAMBLE_LEN` (0x25–26) | `0x0005` | `0x0005` | ✅ (5 bytes) |
+| **`SYNC_CONFIG` (0x27)** | **`0xB1`** | **`0x91`** | **❌ bit 5 differs** |
+| `SYNC_VALUE` (0x28–29) | `0x2DD4` | `0x2DD4` | ✅ |
+| `PKT_CONFIG_1` (0x30) | `0x90` | `0x90` | ✅ |
+| `PKT_CONFIG_2` (0x31) | `0x40` | `0x40` | ✅ |
+| `PAYLOAD_LEN` (0x32) | `0x40` (64) | `0xFF` (255) | ⚠️ minor |
+| `FIFO_THRESH` (0x35) | `0x9F` | `0xA0` | ⚠️ minor |
+| `DIO_MAPPING_1` (0x40) | `0x00` | `0x00` | ✅ |
+
+### Root cause
+
+**`SYNC_CONFIG` (0x27) bit 5 — PreamblePolarity** was different between the two boards:
+
+| Bit 5 value | Meaning | Who |
+|---|---|---|
+| `1` → `0x55` preamble | RadioLib's deliberate default | FSK\_Modem |
+| `0` → `0xAA` preamble | SX1276 chip POR default | FSKExample |
+
+RadioLib's `beginFSK()` explicitly calls `invertPreamble(false)` which sets
+`SYNC_CONFIG` bit 5 = 1, selecting 0x55 preamble polarity.  (RadioLib considers
+0x55 the "non-inverted" FSK preamble and 0xAA the "inverted" variant.)
+
+SX1276\_Radio\_Lite's `setSyncWord()` writes the full `SYNC_CONFIG` register with
+`0x90 | ((len-1) & 0x07)`, which sets bit 5 = 0, retaining the chip's POR default
+of 0xAA preamble polarity.
+
+When the preamble polarities disagree, neither side's preamble detector can lock
+onto the other's preamble — `PreambleDetect` (IRQ1 bit 1) and `SyncAddressMatch`
+(IRQ1 bit 0) never fire.  The receivers enter RX mode successfully (`ModeReady` =
+IRQ1 bit 7 = 1) but time out waiting for a packet that never passes the preamble
+stage.
+
+**Timeout IRQ evidence:**
+```
+IRQ1=0x80 IRQ2=0x40
+```
+- `IRQ1 = 0x80`: only `ModeReady` set; `PreambleDetect` (bit 1) = 0, `SyncAddressMatch` (bit 0) = 0
+- `IRQ2 = 0x40`: only `FifoEmpty` set (expected when no data received)
+
+### Fix
+
+Added `radio.invertPreamble(true)` to `SX127x_FSK_Modem` setup to force 0xAA
+preamble polarity, matching SX1276\_Radio\_Lite and the SX1276 chip default:
+
+```cpp
+// RadioLib's beginFSK() calls invertPreamble(false) which sets preamble
+// polarity to 0x55 (RadioLib's convention).  SX1276_Radio_Lite uses the
+// SX1276 chip default of 0xAA.  Without this override, neither side can
+// detect the other's preamble — the preamble detector expects the wrong
+// byte pattern and never triggers (IRQ1 bit 1 stays 0).
+state = radio.invertPreamble(true);  // true = 0xAA, matching SX1276_Radio_Lite
+```
+
+**File changed:** `extras/interop_tests/SX127x_FSK_Modem/SX127x_FSK_Modem.ino`
+
+---
+
+## Root Cause #6 — SX1276\_Radio\_Lite: FIFO not cleared before FSK/OOK TX
+
+### Symptom
+
+Not yet observed as a standalone failure (masked by Root Cause #5), but identified
+during source code review as a latent bug.
+
+### Root cause
+
+`SX1276::transmit()` wrote data to the FIFO without first clearing it.  After a
+receive timeout, leftover bytes from an aborted reception remain in the FIFO.  When
+the next `transmit()` writes the length byte + payload, the stale bytes are still
+at the head of the FIFO, corrupting the transmitted frame.
+
+RadioLib's `stageMode(TX)` prevents this by calling `clearIrqFlags(FLAGS_ALL)`
+before every TX, which writes `0xFF` to `IRQ_FLAGS_2`.  Bit 4 (`FifoOverrun`) is
+a special "write-1-to-clear" bit that **resets the FIFO** when set.
+
+### Fix
+
+Added FIFO-clearing writes before the FIFO data write in `SX1276::transmit()`:
+
+```cpp
+// Clear IRQ flags and FIFO before writing new TX data.
+// Writing FIFO_OVERRUN (bit 4) to IRQ_FLAGS_2 resets the FIFO, discarding
+// any residual bytes left over from a previous aborted reception.
+writeRegister(SX1276_REG_IRQ_FLAGS_1, 0xFF);
+writeRegister(SX1276_REG_IRQ_FLAGS_2, 0xFF);
+```
+
+**File changed:** `SX1276.cpp` (`SX1276::transmit()`, FSK/OOK branch)
+
+---
+
+## Diagnostic additions (temporary)
+
+The following diagnostic code was added during this investigation and should be
+removed once FSK interop is confirmed working:
+
+| File | Addition |
+|---|---|
+| `examples/FSKExample/FSKExample.ino` | Register dump at end of `setup()` |
+| `examples/FSKExample/FSKExample.ino` | IRQ1/IRQ2 flags printed on RX timeout |
+| `extras/interop_tests/SX127x_FSK_Modem/SX127x_FSK_Modem.ino` | Register dump at end of `setup()` |
+
+---
+
 ## Files Changed
 
 | File | Change |
 |---|---|
 | `examples/FSKExample/FSKExample.ino` | Added `#if defined(ARDUINO_AVR_FEATHER32U4)` / `#else` board pin guard |
+| `examples/FSKExample/FSKExample.ino` | Added register dump and IRQ diagnostics (temporary) |
 | `examples/OOKExample/OOKExample.ino` | Added `REG_OOK_AVG` write to set `DEC_1_8_CHIP` (0x60 into bits [7:5]) |
 | `extras/interop_tests/SX127x_OOK_Modem/SX127x_OOK_Modem.ino` | Changed `getRSSI()` → `getRSSI(false, true)` to avoid stopping receiver |
 | `extras/interop_tests/SX127x_OOK_Modem/SX127x_OOK_Modem.ino` | Added 4–7 s random delay before TX + `randomSeed(micros())` in setup |
+| `extras/interop_tests/SX127x_FSK_Modem/SX127x_FSK_Modem.ino` | Added `radio.invertPreamble(true)` to match SX1276\_Radio\_Lite preamble polarity |
+| `extras/interop_tests/SX127x_FSK_Modem/SX127x_FSK_Modem.ino` | Added register dump (temporary) |
+| `SX1276.cpp` | Clear FIFO before FSK/OOK TX in `transmit()` |
 
 ---
 
@@ -243,3 +381,54 @@ The following VS Code tasks are defined in `.vscode/tasks.json` for compilation:
 | `Compile OOK Modem (ESP32)` | `extras/interop_tests/SX127x_OOK_Modem` | same |
 | `Compile FSKExample (ESP32)` | `examples/FSKExample` | same |
 | `Compile OOKExample (ESP32)` | `examples/OOKExample` | same |
+
+---
+
+## Session Addendum — 17 March 2026
+
+### Additional findings
+
+- `FSKExample` on **both** peers now exchanges packets intermittently after moving to a symmetric RX-first loop, confirming the RF path and core FSK settings are functional.
+- Remaining timeouts are largely consistent with unslotted half-duplex peer traffic (ALOHA-like collisions), not a complete PHY incompatibility.
+- Garbled payload tails seen in `SX127x_FSK_Modem` were traced to sketch-side length handling, not modulation corruption.
+
+### Additional fixes applied
+
+1. FSK bandwidth and AFC tolerance
+- Increased RX bandwidth to `41.7 kHz` on both sketches.
+- Forced AFC bandwidth alignment to match RX bandwidth on both sketches.
+
+2. Near-field overdrive mitigation
+- Reduced TX power to `2 dBm` on both FSK sketches (`TX_POWER_DBM`) for close-range bench tests.
+
+3. Preamble robustness
+- Increased preamble length to `128 bits` on both FSK sketches.
+
+4. Two-peer timing/phase-lock mitigation (`FSKExample`)
+- Converted loop to symmetric **RX-first** behavior.
+- On timeout, transmit beacon only with limited probability.
+- Added jittered cycle timing to reduce persistent TX/TX and RX/RX lockstep.
+- Disabled startup 10 s diagnostic scan by default (`ENABLE_STARTUP_DIAGNOSTIC_SCAN = false`).
+
+5. Garbled RX print fix (`SX127x_FSK_Modem`)
+- Zero-initialized receive buffer before `radio.receive(...)`.
+- Replaced heuristic trailing-zero scan with `radio.getPacketLength()` to print only valid bytes.
+
+6. Board pin mapping parity (`SX127x_FSK_Modem`)
+- Added explicit DIO1 mapping where available:
+   - FireBeetle ESP32 Cover LoRa: DIO1 = `GPIO 9` (`D5`)
+   - TTGO/Lilygo: DIO1 = `LORA_D1` when defined
+- Updated `Module(...)` constructor to pass `RADIO_DIO1` instead of always `RADIOLIB_NC`.
+
+### Current status
+
+- `FSKExample` build: successful.
+- `SX127x_FSK_Modem` build: successful.
+- Interop status: **partial success** (packets exchanged, but timeout ratio still high).
+
+### Remaining optimization path
+
+- Tune peer traffic profile for fewer collisions:
+   - increase timeout beacon probability,
+   - adjust RX timeout window,
+   - narrow jitter range after confirming stable lock.
