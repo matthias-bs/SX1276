@@ -588,6 +588,16 @@ int16_t SX1276::transmit(const uint8_t* data, size_t len) {
         // This caused the next receive() call to reject any incoming packet longer
         // than the just-transmitted message, which could silently drop valid packets.
         
+        // Clear IRQ flags and FIFO before writing new TX data.
+        // Writing FIFO_OVERRUN (bit 4) to IRQ_FLAGS_2 resets the FIFO, discarding
+        // any residual bytes left over from a previous aborted reception.
+        // Without this, leftover RX bytes would be prepended to the TX frame,
+        // corrupting the packet (the first residual byte would be mis-interpreted
+        // as the length byte in variable-length mode).
+        // Matches RadioLib's clearIrqFlags(FLAGS_ALL) in stageMode(TX).
+        writeRegister(SX1276_REG_IRQ_FLAGS_1, 0xFF);
+        writeRegister(SX1276_REG_IRQ_FLAGS_2, 0xFF);
+        
         // Write data to FIFO
         spiBegin();
         spiTransfer(SX1276_REG_FIFO | 0x80);
@@ -827,6 +837,18 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen, uint32_t timeout_ms) {
             spiBegin();
             spiTransfer(SX1276_REG_FIFO);
             len = spiTransfer(0x00);  // First byte is length
+
+            // Guard against malformed frames or stale FIFO state.
+            // In variable-length mode, the first byte must be 1..63 for SX127x FIFO.
+            // If len is 0 or larger than the hardware FIFO payload capacity, flush
+            // FIFO/IRQs and treat as timeout so the caller can retry cleanly.
+            if (len == 0 || len >= 64) {
+                spiEnd();
+                writeRegister(SX1276_REG_IRQ_FLAGS_1, 0xFF);
+                writeRegister(SX1276_REG_IRQ_FLAGS_2, 0xFF);  // includes FIFO reset via OVERRUN bit
+                standby();
+                return SX1276_ERR_RX_TIMEOUT;
+            }
             
             if (len > maxLen) {
                 len = maxLen;
