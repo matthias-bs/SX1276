@@ -69,8 +69,8 @@ RadioLib test board: [Lilygo T3 LoRa32 V1.6.1](https://lilygo.cc/en-us/products/
 | SX1276_Radio_Lite Example | Actual RadioLib Sketch Used | Result | Notes |
 |---------------------------|-----------------------------|--------|-------|
 | TransmitExample           | [SX127x_Receive_Interrupt.ino](../extras/interop_tests/SX127x_Receive_Interrupt/SX127x_Receive_Interrupt.ino)    | ✅     | LoRa, TX-only      |
-| ReceiveExample            | [SX127x_Transmit_Interrupt.ino](../extras/interop_tests/SX127x_Transmit_Interrupt/SX127x_Transmit_Interrupt.ino)  | ✅     | LoRa, RX-only      |
-| BasicExample              | ? | ?     | LoRa, bidirectional |
+| ReceiveExample            | [SX127x_Transmit_Interrupt.ino](../extras/interop_tests/SX127x_Transmit_Interrupt/SX127x_Transmit_Interrupt.ino)   | ✅     | LoRa, RX-only      |
+| BasicExample              | [SX127x_Receive_Interrupt.ino](../extras/interop_tests/SX127x_Receive_Interrupt/SX127x_Receive_Interrupt.ino) / [SX127x_Transmit_Interrupt.ino](../extras/interop_tests/SX127x_Transmit_Interrupt/SX127x_Transmit_Interrupt.ino)   | ✅     | LoRa, bidirectional |
 | RadioLibCompatible        | [SX127x_PingPong.ino](../extras/interop_tests/SX127x_PingPong/SX127x_PingPong.ino)                                      | ✅     | LoRa, bidirectional, uses RadioLib compatible constructor |
 | FSKExample                | [SX127x_FSK_Modem](../extras/SX127x_FSK_Modem/SX127x_FSK_Modem.ino)                                                      | ✅     | FSK, bidirectional |
 | FSKRxExample              | [SX127x_FSK_Modem](../extras/SX127x_FSK_Modem/SX127x_FSK_Modem.ino)                                                      | ✅     | FSK, RX-only, interrupt-driven |
