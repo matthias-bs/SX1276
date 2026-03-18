@@ -219,8 +219,9 @@ void loop() {
 
 See the [OOKExample](examples/OOKExample/OOKExample.ino) for a complete OOK example.
 
-> **Note:** In Europe, OOK is typically used in the 433 MHz ISM band.
-> The examples use 868 MHz because suitable 433 MHz test hardware was not available.
+
+> **Note:**
+> Typically OOK would be used with 433 MHz in the EU. The OOK example uses 868 MHz because suitable 433 MHz test hardware was not available.
 
 ## API Reference
 
@@ -352,9 +353,11 @@ This library is specifically designed for memory-constrained devices:
 
 ## Regulatory Compliance — Duty Cycle
 
+
 > **⚠️ Warning:** Transmitting on ISM/SRD bands is subject to local radio regulations.
-> In Europe (ETSI EN 300 220), the 868.0–868.6 MHz g1 sub-band limits transmitters to
-> **1 % duty cycle** and **25 mW ERP**. Other sub-bands and regions have different limits.
+> - The **868.0–868.6 MHz** g1 sub-band (EU SRD) limits **all modulation types** (LoRa, FSK, OOK) to **1% duty cycle** and **25 mW ERP** (ETSI EN 300 220).
+> - The **433.05–434.79 MHz** ISM band (EU) is typically used for OOK and allows up to **10% duty cycle** and **10 mW ERP** (but always check local regulations).
+> - Other sub-bands and regions have different limits.
 
 When writing your own sketch, you **must** ensure the time-on-air of each transmission
 divided by the TX interval stays below the applicable duty cycle limit. The formula is:
