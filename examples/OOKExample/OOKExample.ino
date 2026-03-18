@@ -66,7 +66,9 @@ void setup() {
     ; // Wait for Serial to be ready (or 5 seconds timeout)
   }
   
-  Serial.println(F("SX1276_Radio_Lite - OOK Example (868 MHz)"));
+  Serial.print(F("SX1276_Radio_Lite - OOK Example ("));
+  Serial.print(RADIO_FREQ / 1e6, 3);
+  Serial.println(F(" MHz)"));
   Serial.println(F("Initializing..."));
   
   // Initialize the radio
@@ -104,10 +106,10 @@ void setup() {
     }
   }
   radio.setRxBandwidth(SX1276_RX_BW_10_4_KHZ_FSK);   // 10.4 kHz bandwidth
-  radio.setPower(17, true);                        // 17 dBm with PA_BOOST
+  // Set transmit power: 10 dBm is safe for both 433 MHz (max 10 mW ERP) and 868 MHz (max 25 mW ERP)
+  radio.setPower(10, true);                        // 10 dBm with PA_BOOST
   
   // Sync word — must match RadioLib counterpart:
-  //   uint8_t syncWord[] = {0x12, 0xAD}; radio.setSyncWord(syncWord, 2);
   uint8_t syncWord[] = {0x12, 0xAD};
   radio.setSyncWord(syncWord, 2);
   
