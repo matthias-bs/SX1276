@@ -1,13 +1,23 @@
 /*
  * RadioLibCompatible.ino
  * 
- * Example demonstrating RadioLib-compatible API usage
- * This shows how to migrate from RadioLib with minimal code changes
+ * Example demonstrating RadioLib-compatible API usage.
+ * This shows how to migrate from RadioLib with minimal code changes.
  * 
- * RadioLib equivalent:
- * Module mod(8, 7, 4);
- * SX1276 radio(&mod);
- * radio.begin(915.0, 125.0, 9, 7, 0x12, 10, 8, 0);
+ * Interop partner: extras/interop_tests/SX127x_PingPong/SX127x_PingPong.ino (RadioLib)
+ * 
+ * Configuration (RadioLib defaults):
+ *   Frequency     : 868 MHz
+ *   Spreading fac.: SF9
+ *   Bandwidth     : 125 kHz
+ *   Coding rate   : 4/7
+ *   Sync word     : 0x12
+ *   CRC           : on
+ *   Preamble      : 8 symbols
+ * 
+ * EU compliance note: 868 MHz g1 sub-band (868.0–868.6 MHz) permits
+ * max 25 mW ERP with a 1% duty cycle (ETSI EN 300 220).  This sketch
+ * enforces a minimum TX interval (TX_MIN_INTERVAL_MS) to stay below 1%.
  */
 
 #include <Arduino.h>
@@ -26,6 +36,13 @@
 
 // Create SX1276 instance with RadioLib-compatible constructor
 SX1276 radio(LORA_CS, LORA_IRQ, LORA_RST);
+
+// EU 868 MHz g1 sub-band duty cycle enforcement.
+// At SF9 / BW 125 kHz a ~20-byte LoRa packet takes ~226 ms airtime.
+// 1% duty cycle  =>  min interval >= airtime / 0.01 ≈ 22.6 s.
+// We use 25 s to leave headroom.
+static const unsigned long TX_MIN_INTERVAL_MS = 25000;
+static unsigned long lastTxMs = 0;
 
 void setup() {
   Serial.begin(115200);
@@ -75,24 +92,22 @@ void setup() {
 }
 
 void loop() {
+  // enforce EU 868 MHz 1% duty cycle before next TX
+  unsigned long elapsed = millis() - lastTxMs;
+  if (elapsed < TX_MIN_INTERVAL_MS) {
+    delay(TX_MIN_INTERVAL_MS - elapsed);
+  }
+
   // Prepare message
   static uint32_t counter = 0;
   char message[50];
   snprintf(message, sizeof(message), "RadioLib-style #%lu", counter++);
 
-  // Add random delay to prevent lock-up between devices
-  // Random delay between 0 and 1000 ms
-  uint16_t randomDelay = random(0, 1000);
-  Serial.print(F("Random delay before transmit: "));
-  Serial.print(randomDelay);
-  Serial.println(F(" ms"));
-  delay(randomDelay);
-
   Serial.print(F("Transmitting: "));
   Serial.println(message);
 
   // Transmit the message
-  // Note: RadioLib uses String, we use byte array for efficiency
+  lastTxMs = millis();
   int16_t state = radio.transmit((uint8_t*)message, strlen(message));
 
   if (state == SX1276_ERR_NONE) {
@@ -102,13 +117,13 @@ void loop() {
     Serial.println(state);
   }
 
-  // Listen immediately after transmitting so the response is not missed.
-  // The PingPong peer responds within ~1 second; waiting 5 s before opening
-  // the receive window caused the response to always be missed.
+  // Listen for the PingPong peer's response.
+  // The peer enforces its own duty cycle, so the response may be delayed
+  // up to TX_MIN_INTERVAL_MS; use a matching timeout.
   Serial.println(F("Listening for packets..."));
 
   uint8_t buffer[255];
-  state = radio.receive(buffer, sizeof(buffer));
+  state = radio.receive(buffer, sizeof(buffer), TX_MIN_INTERVAL_MS);
 
   if (state > 0) {
     // Received a packet
@@ -130,9 +145,6 @@ void loop() {
   } else if (state == SX1276_ERR_RX_TIMEOUT) {
     Serial.println(F("No packet received"));
   }
-
-  // Wait before the next transmit cycle
-  delay(5000);
 
   Serial.println();
 }

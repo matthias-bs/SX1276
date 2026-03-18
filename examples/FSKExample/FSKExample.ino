@@ -15,6 +15,10 @@
  *   Preamble      : 128 bits (16 bytes)
  *   Packet format : variable length, CRC on (CCITT, autoclear on)
  *   DC-free       : none
+ *
+ * EU compliance note: 868 MHz g1 sub-band (868.0–868.6 MHz) permits
+ * max 25 mW ERP with a 1% duty cycle (ETSI EN 300 220).  This sketch
+ * enforces a minimum TX interval (TX_MIN_INTERVAL_MS) to stay below 1%.
  */
 
 #include <Arduino.h>
@@ -54,6 +58,12 @@
 // Low-power preset for close-range interoperability testing.
 static const int8_t TX_POWER_DBM = 5;
 static const uint16_t FSK_PREAMBLE_BITS = 128;
+
+// EU 868 MHz g1 sub-band duty cycle enforcement.
+// At 4.8 kbps with 128-bit preamble, ~20-byte payload:
+// airtime ≈ 60 ms  =>  min interval >= 6 s.  Use 7 s for headroom.
+static const unsigned long TX_MIN_INTERVAL_MS = 7000;
+static unsigned long lastTxMs = 0;
 
 // Create SX1276 instance
 SX1276 radio;
@@ -162,7 +172,10 @@ void loop() {
   // RX-first symmetric loop: listen, then transmit with probability
   Serial.println(F("Listening for packet..."));
   uint8_t buffer[64];
-  int16_t state = radio.receive(buffer, sizeof(buffer), 4000);
+  // Timeout must cover the peer's worst-case TX cycle:
+  // 8 s RX timeout + 7 s duty enforcement + ~60 ms airtime ≈ 15 s.
+  // Use 16 s to guarantee catching at least one peer transmission.
+  int16_t state = radio.receive(buffer, sizeof(buffer), 16000);
 
   bool shouldTransmit = false;
   if (state > 0) {
@@ -186,12 +199,19 @@ void loop() {
   }
 
   if (shouldTransmit) {
+    // enforce EU 868 MHz 1% duty cycle
+    unsigned long elapsed = millis() - lastTxMs;
+    if (elapsed < TX_MIN_INTERVAL_MS) {
+      delay(TX_MIN_INTERVAL_MS - elapsed);
+    }
+
     static uint32_t counter = 0;
     char message[50];
     snprintf(message, sizeof(message), "FSK msg #%lu", (unsigned long)counter);
     counter++;
     Serial.print(F("Transmitting: "));
     Serial.println(message);
+    lastTxMs = millis();
     state = radio.transmit((uint8_t*)message, strlen(message));
     if (state == SX1276_ERR_NONE) {
       Serial.println(F("Transmission successful!"));
@@ -201,7 +221,5 @@ void loop() {
     }
   }
 
-  // Jittered cycle timing to avoid phase-lock
-  delay(120 + random(0, 600));
   Serial.println();
 }

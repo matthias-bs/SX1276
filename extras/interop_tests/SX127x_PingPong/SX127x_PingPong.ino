@@ -1,8 +1,20 @@
 /*
   RadioLib SX127x Ping-Pong Example
 
-  This example is intended to run on two SX126x radios,
-  and send packets between the two.
+  Interop partner: examples/RadioLibCompatible/RadioLibCompatible.ino (SX1276_Radio_Lite)
+
+  Configuration (RadioLib defaults, must match interop partner):
+    Frequency     : 868 MHz
+    Spreading fac.: SF9
+    Bandwidth     : 125 kHz
+    Coding rate   : 4/7
+    Sync word     : 0x12
+    CRC           : on
+    Preamble      : 8 symbols
+
+  EU compliance note: 868 MHz g1 sub-band (868.0–868.6 MHz) permits
+  max 25 mW ERP with a 1% duty cycle (ETSI EN 300 220).  This sketch
+  enforces a minimum TX interval (TX_MIN_INTERVAL_MS) to stay below 1%.
 
   For default module settings, see the wiki page
   https://github.com/jgromes/RadioLib/wiki/Default-configuration#sx127xrfm9x---lora-modem
@@ -54,6 +66,15 @@ void setFlag(void) {
   operationDone = true;
 }
 
+// EU 868 MHz g1 sub-band duty cycle enforcement.
+// At SF9 / BW 125 kHz a ~12-byte LoRa packet takes ~169 ms airtime.
+// 1% duty cycle  =>  min interval >= airtime / 0.01 ≈ 16.9 s.
+// We use 25 s to leave headroom and match the peer.
+static const unsigned long TX_MIN_INTERVAL_MS = 25000;
+
+// Timestamp of the last transmission start
+static unsigned long lastTxMs = 0;
+
 void setup() {
   Serial.begin(115200);
 
@@ -75,6 +96,7 @@ void setup() {
   #if defined(INITIATING_NODE)
     // send the first packet on this node
     Serial.print(F("[SX1276] Sending first packet ... "));
+    lastTxMs = millis();
     transmissionState = radio.startTransmit("Hello World!");
     transmitFlag = true;
   #else
@@ -140,11 +162,15 @@ void loop() {
 
       }
 
-      // wait a second before transmitting again
-      delay(1000);
+      // enforce EU 868 MHz 1% duty cycle
+      unsigned long elapsed = millis() - lastTxMs;
+      if (elapsed < TX_MIN_INTERVAL_MS) {
+        delay(TX_MIN_INTERVAL_MS - elapsed);
+      }
 
       // send another one
       Serial.print(F("[SX1276] Sending another packet ... "));
+      lastTxMs = millis();
       transmissionState = radio.startTransmit("Hello World!");
       transmitFlag = true;
     }

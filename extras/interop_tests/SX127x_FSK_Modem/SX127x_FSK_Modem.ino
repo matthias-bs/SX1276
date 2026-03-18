@@ -20,6 +20,10 @@
  *   2. If received, print payload and RSSI, then transmit a reply.
  *   3. If nothing received within the timeout, transmit a beacon anyway.
  *   4. Repeat.
+ *
+ * EU compliance note: 868 MHz g1 sub-band (868.0–868.6 MHz) permits
+ * max 25 mW ERP with a 1% duty cycle (ETSI EN 300 220).  This sketch
+ * enforces a minimum TX interval (TX_MIN_INTERVAL_MS) to stay below 1%.
  */
 
 // include the library
@@ -171,12 +175,20 @@ void setup() {
 static const size_t RX_BUF_LEN = 64;
 static uint32_t txCounter = 0;
 
+// EU 868 MHz g1 sub-band duty cycle enforcement.
+// At 4.8 kbps with 128-bit preamble, ~20-byte payload:
+// airtime ≈ 60 ms  =>  min interval >= 6 s.  Use 7 s for headroom.
+static const unsigned long TX_MIN_INTERVAL_MS = 7000;
+static unsigned long lastTxMs = 0;
+
 void loop() {
-  // Listen for a packet (8 s timeout) — ensures overlap with peer TX interval.
+  // Listen for a packet — timeout must cover the peer's worst-case TX cycle:
+  // 8 s RX timeout + 7 s duty enforcement + ~60 ms airtime ≈ 15 s.
+  // Use 16 s to guarantee catching at least one peer transmission.
   Serial.println(F("[SX1276] Listening for packet..."));
   byte rxBuf[RX_BUF_LEN];
   memset(rxBuf, 0, sizeof(rxBuf));
-  int rxState = radio.receive(rxBuf, RX_BUF_LEN, /* timeout ms */ 8000);
+  int rxState = radio.receive(rxBuf, RX_BUF_LEN, /* timeout ms */ 16000);
 
   bool shouldTransmit = true;
   if (rxState == RADIOLIB_ERR_NONE) {
@@ -216,11 +228,18 @@ void loop() {
 
   // Transmit a reply or beacon.
   if (shouldTransmit) {
+    // enforce EU 868 MHz 1% duty cycle
+    unsigned long elapsed = millis() - lastTxMs;
+    if (elapsed < TX_MIN_INTERVAL_MS) {
+      delay(TX_MIN_INTERVAL_MS - elapsed);
+    }
+
     char txMsg[50];
     snprintf(txMsg, sizeof(txMsg), "RadioLib reply #%lu", txCounter++);
     Serial.print(F("[SX1276] Transmitting: "));
     Serial.println(txMsg);
 
+    lastTxMs = millis();
     int txState = radio.transmit((uint8_t*)txMsg, strlen(txMsg));
     if (txState == RADIOLIB_ERR_NONE) {
       Serial.println(F("[SX1276] Transmission successful!"));
@@ -234,7 +253,5 @@ void loop() {
     }
   }
 
-  // Keep non-RX gap short so this node is listening most of the time.
-  delay(80 + random(0, 220));
   Serial.println();
 }
