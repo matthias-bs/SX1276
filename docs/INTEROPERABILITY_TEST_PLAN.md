@@ -26,12 +26,11 @@ Verify interoperability between SX1276_Radio_Lite examples and RadioLib SX127x e
 ## Test Steps
 
 ### 1. Frequency & Modulation Alignment
-- Set all LoRa/FSK examples to 868 MHz for EU compliance.
-- Ensure modulation settings (SF, BW, CR, sync word, preamble) match between sender and receiver.
-- For OOK at 868 MHz, observe the 1% duty cycle limit (EU SRD band 868.0–868.6 MHz, max 25 mW ERP).
 
-### 2. Hardware Setup
-- Use two boards (one for SX1276_Radio_Lite, one for RadioLib).
+> **Note:**
+> - The **433 MHz ISM band** (433.05–434.79 MHz) is typically used for OOK in Europe. It usually allows up to **10% duty cycle** and **10 mW ERP** (but always check local regulations).
+> - The **868 MHz SRD band** (868.0–868.6 MHz) is used for FSK, LoRa, and sometimes OOK. It is limited to **1% duty cycle** and **25 mW ERP** for all modulation types.
+
 - Connect antennas suitable for 868 MHz (LoRa/FSK/OOK).
 
 ### 3. Test Execution
@@ -49,7 +48,6 @@ Verify interoperability between SX1276_Radio_Lite examples and RadioLib SX127x e
 #### OOK Tests
 - Flash OOKExample to SX1276_Radio_Lite board, `extras/SX127x_OOK_Modem/SX127x_OOK_Modem.ino` to RadioLib board.
 - Confirm message exchange, check sync word and CRC.
-- Note: `SX127x_Receive_Direct` uses raw bit-level direct mode (reads bits via DIO2 ISR, no packet engine) and is therefore incompatible with OOKExample which uses the SX1276 packet engine (FIFO, hardware sync word, length byte, CRC).
 
 ### 4. Compliance Checks
 - Measure output power (should not exceed 17 dBm for LoRa/FSK, check OOK limits).
@@ -87,7 +85,7 @@ RadioLib test board: [Lilygo T3 LoRa32 V1.6.1](https://lilygo.cc/en-us/products/
 ## Recommendations
 - Always match modulation settings exactly.
 - Use 868 MHz for LoRa/FSK/OOK in EU.
-- For OOK at 868 MHz, observe the 1% duty cycle limit (EU SRD band).
+- Observe the 1% duty cycle limit for all modulation types in the EU SRD band 868.0–868.6 MHz.
 - Document any deviations or issues.
 
 ---
