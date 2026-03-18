@@ -47,7 +47,11 @@
 #define RADIO_RST   LORA_RST
 #define RADIO_DIO0  LORA_IRQ
 #else
-#if !defined(LORA_CS) || !defined(LORA_RST) || !defined(LORA_IRQ)
+#if defined(LORA_CS) && defined(LORA_RST) && defined(LORA_IRQ)
+#define RADIO_CS    LORA_CS
+#define RADIO_RST   LORA_RST
+#define RADIO_DIO0  LORA_IRQ
+#elif !defined(RADIO_CS) || !defined(RADIO_RST) || !defined(RADIO_DIO0)
 #error "Unsupported board: define RADIO_CS/RADIO_RST/RADIO_DIO0 for this target."
 #endif
 #endif
