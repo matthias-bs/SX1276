@@ -51,6 +51,9 @@
 #endif
 #endif
 
+// Radio frequency (433 MHz is common for OOK applications in EU)
+//#define RADIO_FREQ  433000000L
+
 // Radio frequency — 868 MHz SRD band (EU)
 #define RADIO_FREQ  868000000L
 
