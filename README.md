@@ -349,6 +349,66 @@ This library is specifically designed for memory-constrained devices:
   - Define both to enable all modes with runtime switching
 - **Debug macros**: Debug output compiled out when not needed
 
+## Regulatory Compliance — Duty Cycle
+
+> **⚠️ Warning:** Transmitting on ISM/SRD bands is subject to local radio regulations.
+> In Europe (ETSI EN 300 220), the 868.0–868.6 MHz g1 sub-band limits transmitters to
+> **1 % duty cycle** and **25 mW ERP**. Other sub-bands and regions have different limits.
+
+When writing your own sketch, you **must** ensure the time-on-air of each transmission
+divided by the TX interval stays below the applicable duty cycle limit. The formula is:
+
+$$\text{duty cycle} = \frac{T_{\text{air}}}{T_{\text{interval}}} \leq 0.01 \quad (1\,\%)$$
+
+Factors that affect airtime: spreading factor (LoRa), bit rate (FSK/OOK), preamble length,
+payload size, and coding rate.
+
+All examples in this library enforce the 1 % limit via a `TX_MIN_INTERVAL_MS` guard.
+See any example sketch (e.g. [BasicExample](examples/BasicExample/BasicExample.ino)) for
+the pattern.
+
+### Bidirectional Nodes — Synchronization
+
+Bidirectional sketches (e.g. [FSKExample](examples/FSKExample/FSKExample.ino),
+[RadioLibCompatible](examples/RadioLibCompatible/RadioLibCompatible.ino)) that both
+transmit **and** receive face a synchronization challenge: each node alternates between
+TX and RX windows, and the duty cycle enforcement delay increases the total cycle time.
+If both nodes happen to transmit at the same moment, a collision occurs; if they listen
+at the same moment, neither sends.
+
+Mitigations used in the examples:
+
+- **RX timeout ≥ peer's worst-case TX cycle** — ensures at least one peer transmission
+  falls inside each listen window.
+- **Jittered timing** — `randomSeed(micros())` plus randomized delays decorrelate the
+  two nodes so they gradually drift out of phase-lock.
+- **Probabilistic beaconing** — on RX timeout, transmit with < 100 % probability to
+  break symmetric deadlocks.
+
+Even so, the first few exchanges after power-on may experience timeouts until the nodes
+de-synchronize. This is expected behaviour and not a fault.
+
+### Avoiding Synchronization Issues in Production
+
+For real applications, prefer **asymmetric roles** over symmetric ping-pong:
+
+| Approach | Description | Complexity |
+|----------|------------|------------|
+| **Initiator / Responder** | One node (primary) always initiates; the other (secondary) stays in continuous RX and only transmits a short reply after being polled. No timing conflict — exactly one transmitter at a time. This is how LoRaWAN Class A works. | Low |
+| **Listen-Before-Talk (LBT)** | Check RSSI before transmitting; back off if the channel is busy. Avoids collisions but does not break the "both listening" deadlock alone — still needs one side to initiate. | Medium |
+| **TDMA** | Assign fixed time slots to each node. Requires synchronized clocks (GPS, NTP, or a coordinator beacon). Scales to many nodes but is overkill for two. | High |
+| **Slotted ALOHA + Backoff** | Transmit at random times; on collision (no ACK), wait a random, exponentially increasing delay before retrying. Simple, no roles, but lower throughput. | Medium |
+
+**Recommendation:** Use the **Initiator / Responder** pattern. The primary transmits,
+then opens a short RX window for the reply; the secondary stays in continuous RX.
+This eliminates synchronization problems entirely and is inherently duty-cycle-friendly
+because the responder only transmits briefly after being polled.
+
+The existing `TransmitExample` + `ReceiveExample` pair already demonstrates one-way
+Initiator / Responder communication. For bidirectional data exchange, extend the primary
+to listen for a reply immediately after its transmission (similar to LoRaWAN Class A RX
+windows).
+
 ## Compatibility
 
 Tested and compatible with:
