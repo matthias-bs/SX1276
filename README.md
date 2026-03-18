@@ -428,7 +428,7 @@ This library is licensed under the MIT License. See [LICENSE](LICENSE) for detai
 
 ## Credits
 
-Based on [RadioLib](https://github.com/jgromes/RadioLib) by Jan Gromeš.
+Based on [RadioLib](https://github.com/jgromes/RadioLib) by Jan Gromeš and RadioLib contributors.
 
 ## Contributing
 
