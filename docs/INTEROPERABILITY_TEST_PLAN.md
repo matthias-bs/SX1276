@@ -14,6 +14,12 @@ Verify interoperability between SX1276_Radio_Lite examples and RadioLib SX127x e
 | RadioLibCompatible             | PingPong                            | LoRa       | 868 MHz  | SF9, BW 125kHz, CR 4/7, Sync 0x12 |
 | FSKExample                     | FSK_Modem                          | FSK        | 868 MHz  | 4.8kbps, 5kHz dev, Sync 0x2D,0xD4 |
 | OOKExample                     | SX127x_OOK_Modem (extras)           | OOK        | 868 MHz  | 4.8kbps, 0Hz dev, Sync 0x12,0xAD |
+| FSKRxExample                   | SX127x_FSK_Modem                    | FSK        | 868 MHz  | RX-only, same params as FSKExample |
+| FSKTxExample                   | SX127x_FSK_Modem                    | FSK        | 868 MHz  | TX-only, same params as FSKExample |
+| BasicExample                   | Receive_Blocking, Transmit_Blocking | LoRa       | 868 MHz  | Bidirectional, basic LoRa test |
+| BresserRxExample               | SX127x_FSK_Modem                    | FSK        | 868.3 MHz| Bresser sensor RX, custom sync/preamble |
+| BresserWeatherSensorBasic      | SX127x_FSK_Modem                    | FSK        | 868.3 MHz| Bresser sensor RX + decode |
+| BresserWeatherSensorTransmitter| SX127x_FSK_Modem                    | FSK        | 868.3 MHz| Bresser sensor TX emulation |
 
 ---
 
@@ -62,11 +68,17 @@ RadioLib test board: [Lilygo T3 LoRa32 V1.6.1](https://lilygo.cc/en-us/products/
 
 | SX1276_Radio_Lite Example | Actual RadioLib Sketch Used | Result | Notes |
 |---------------------------|-----------------------------|--------|-------|
-| TransmitExample           | [SX127x_Receive_Interrupt.ino](../extras/interop_tests/SX127x_Receive_Interrupt/SX127x_Receive_Interrupt.ino)    | ✅     |       |
-| ReceiveExample            | [SX127x_Transmit_Interrupt.ino](../extras/interop_tests/SX127x_Transmit_Interrupt/SX127x_Transmit_Interrupt.ino)  | ✅     |       |
-| RadioLibCompatible        | [SX127x_PingPong.ino](../extras/interop_tests/SX127x_PingPong/SX127x_PingPong.ino)                                      | ✅     |       |
-| FSKExample                | [SX127x_FSK_Modem](../extras/SX127x_FSK_Modem/SX127x_FSK_Modem.ino)                                                      |        |       |
-| OOKExample                | [SX127x_OOK_Modem.ino](../extras/SX127x_OOK_Modem/SX127x_OOK_Modem.ino)                                                      | ✅     |       |
+| TransmitExample           | [SX127x_Receive_Interrupt.ino](../extras/interop_tests/SX127x_Receive_Interrupt/SX127x_Receive_Interrupt.ino)    | ✅     | LoRa, TX-only      |
+| ReceiveExample            | [SX127x_Transmit_Interrupt.ino](../extras/interop_tests/SX127x_Transmit_Interrupt/SX127x_Transmit_Interrupt.ino)  | ✅     | LoRa, RX-only      |
+| BasicExample              | ? | ?     | LoRa, bidirectional |
+| RadioLibCompatible        | [SX127x_PingPong.ino](../extras/interop_tests/SX127x_PingPong/SX127x_PingPong.ino)                                      | ✅     | LoRa, bidirectional, uses RadioLib compatible constructor |
+| FSKExample                | [SX127x_FSK_Modem](../extras/SX127x_FSK_Modem/SX127x_FSK_Modem.ino)                                                      | ✅     | FSK, bidirectional |
+| FSKRxExample              | [SX127x_FSK_Modem](../extras/SX127x_FSK_Modem/SX127x_FSK_Modem.ino)                                                      | ✅     | FSK, RX-only, interrupt-driven |
+| FSKTxExample              | [SX127x_FSK_Modem](../extras/SX127x_FSK_Modem/SX127x_FSK_Modem.ino)                                                      | ✅     | FSK, TX-only                 |
+| BresserRxExample          | [SensorTransmitter](https://github.com/matthias-bs/SensorTransmitter/blob/main/SensorTransmitter.ino)                                                      | ✅     | FSK, Bresser sensor RX          |
+| BresserWeatherSensorBasic | [SensorTransmitter](https://github.com/matthias-bs/SensorTransmitter/blob/main/SensorTransmitter.ino)                                                      | ✅     | FSK, Bresser sensor RX + decode |
+| BresserWeatherSensorTransmitter | [BresserWeatherSensorBasic](https://github.com/matthias-bs/BresserWeatherSensorReceiver/tree/main/examples/BresserWeatherSensorBasic)                                | ✅     | FSK, Bresser sensor TX emulation |
+| OOKExample                | [SX127x_OOK_Modem.ino](../extras/SX127x_OOK_Modem/SX127x_OOK_Modem.ino)                                                      | ✅     | OOK, bidirectional          |
 
 <!-- Fill in the Actual RadioLib Sketch Used, Result, and Notes columns during testing -->
 
