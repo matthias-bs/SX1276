@@ -1,3 +1,8 @@
+[![CI](https://github.com/matthias-bs/SX1276_Radio_Lite/actions/workflows/CI.yml/badge.svg)](https://github.com/matthias-bs/SX1276_Radio_Lite/actions/workflows/CI.yml)
+[![GitHub release](https://img.shields.io/github/release/matthias-bs/SX1276_Radio_Lite?maxAge=3600)](https://github.com/matthias-bs/SX1276_Radio_Lite/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](https://github.com/matthias-bs/SX1276_Radio_Lite/blob/main/LICENSE)
+[![arduino-library-badge](https://www.ardu-badge.com/badge/SX1276_Radio_Lite.svg?)](https://www.ardu-badge.com/SX1276_Radio_Lite)
+
 # SX1276_Radio_Lite
 
 Lightweight SX1276 radio library for Arduino supporting LoRa, FSK, and OOK modulations, optimized for memory-constrained devices.
