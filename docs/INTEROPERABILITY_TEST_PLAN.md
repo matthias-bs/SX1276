@@ -13,7 +13,7 @@ Verify interoperability between SX1276_Radio_Lite examples and RadioLib SX127x e
 | ReceiveExample                 | Transmit_Blocking, Transmit_Interrupt| LoRa     | 868 MHz  | SF7, BW 125kHz, CR 4/5, Sync 0x12 |
 | RadioLibCompatible             | PingPong                            | LoRa       | 868 MHz  | SF9, BW 125kHz, CR 4/7, Sync 0x12 |
 | FSKExample                     | FSK_Modem                          | FSK        | 868 MHz  | 4.8kbps, 5kHz dev, Sync 0x2D,0xD4 |
-| OOKExample                     | SX127x_OOK_Modem (extras)           | OOK        | 868 MHz  | 4.8kbps, 0Hz dev, Sync 0x12,0xAD |
+| OOKExample                     | SX127x_OOK_Modem (extras)           | OOK        | 868 MHz  | 4.8kbps, 0Hz dev, Sync 0x12,0xAD. Note: OOK is typically used at 433 MHz in EU; 868 MHz was used because suitable 433 MHz test HW was not available. |
 | FSKRxExample                   | SX127x_FSK_Modem                    | FSK        | 868 MHz  | RX-only, same params as FSKExample |
 | FSKTxExample                   | SX127x_FSK_Modem                    | FSK        | 868 MHz  | TX-only, same params as FSKExample |
 | BasicExample                   | Receive_Blocking, Transmit_Blocking | LoRa       | 868 MHz  | Bidirectional, basic LoRa test |
@@ -78,7 +78,7 @@ RadioLib test board: [Lilygo T3 LoRa32 V1.6.1](https://lilygo.cc/en-us/products/
 | BresserRxExample          | [SensorTransmitter](https://github.com/matthias-bs/SensorTransmitter/blob/main/SensorTransmitter.ino)                                                      | ✅     | FSK, Bresser sensor RX          |
 | BresserWeatherSensorBasic | [SensorTransmitter](https://github.com/matthias-bs/SensorTransmitter/blob/main/SensorTransmitter.ino)                                                      | ✅     | FSK, Bresser sensor RX + decode |
 | BresserWeatherSensorTransmitter | [BresserWeatherSensorBasic](https://github.com/matthias-bs/BresserWeatherSensorReceiver/tree/main/examples/BresserWeatherSensorBasic)                                | ✅     | FSK, Bresser sensor TX emulation |
-| OOKExample                | [SX127x_OOK_Modem.ino](../extras/SX127x_OOK_Modem/SX127x_OOK_Modem.ino)                                                      | ✅     | OOK, bidirectional          |
+| OOKExample                | [SX127x_OOK_Modem.ino](../extras/SX127x_OOK_Modem/SX127x_OOK_Modem.ino)                                                      | ✅     | OOK, bidirectional. 868 MHz used (no 433 MHz HW available). |
 
 <!-- Fill in the Actual RadioLib Sketch Used, Result, and Notes columns during testing -->
 

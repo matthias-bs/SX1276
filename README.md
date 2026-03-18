@@ -56,7 +56,7 @@ void setup() {
     Serial.begin(115200);
     
     // Initialize: freq in Hz, then pins
-    int16_t state = radio.begin(915000000L, 8, 4, 7);  // freq, cs, rst, dio0
+    int16_t state = radio.begin(868000000L, 8, 4, 7);  // freq, cs, rst, dio0
     
     if (state == SX1276_ERR_NONE) {
         Serial.println("Radio initialized!");
@@ -87,9 +87,9 @@ void setup() {
     Serial.begin(115200);
     
     // RadioLib-style begin with MHz and optional parameters
-    int16_t state = radio.begin(915.0);  // Frequency in MHz
+    int16_t state = radio.begin(868.0);  // Frequency in MHz
     // Or with full parameters:
-    // state = radio.begin(915.0, 125.0, 9, 7, 0x12, 10, 8, 0);
+    // state = radio.begin(868.0, 125.0, 9, 7, 0x12, 10, 8, 0);
     
     if (state == SX1276_ERR_NONE) {
         Serial.println("Radio initialized!");
@@ -108,7 +108,6 @@ See the [BasicExample](examples/BasicExample/BasicExample.ino) for simplified AP
 ### Complete Example (Simplified API)
 
 ```cpp
-#define LORA_ENABLED  // Enable LoRa modulation
 #include <SX1276.h>
 
 // Pin definitions for Adafruit Feather 32u4 RFM95
@@ -121,8 +120,8 @@ SX1276 radio;
 void setup() {
     Serial.begin(115200);
     
-    // Initialize radio at 915 MHz
-    int16_t state = radio.begin(915000000L, LORA_CS, LORA_RST, LORA_DIO0);
+    // Initialize radio at 868 MHz
+    int16_t state = radio.begin(868000000L, LORA_CS, LORA_RST, LORA_DIO0);
     
     if (state == SX1276_ERR_NONE) {
         Serial.println("Radio initialized!");
@@ -155,7 +154,6 @@ See the [BasicExample](examples/BasicExample/BasicExample.ino) for a complete Lo
 ### FSK Example
 
 ```cpp
-#define FSK_OOK_ENABLED  // Enable FSK/OOK modulation
 #include <SX1276.h>
 
 SX1276 radio;
@@ -163,8 +161,8 @@ SX1276 radio;
 void setup() {
     Serial.begin(115200);
     
-    // Initialize radio at 915 MHz
-    radio.begin(915000000L, 8, 4, 7);
+    // Initialize radio at 868 MHz
+    radio.begin(868000000L, 8, 4, 7);
     
     // Set modulation to FSK
     radio.setModulation(SX1276_MODULATION_FSK);
@@ -190,7 +188,6 @@ See the [FSKExample](examples/FSKExample/FSKExample.ino) for a complete FSK exam
 ### OOK Example
 
 ```cpp
-#define FSK_OOK_ENABLED  // Enable FSK/OOK modulation
 #include <SX1276.h>
 
 SX1276 radio;
@@ -198,8 +195,8 @@ SX1276 radio;
 void setup() {
     Serial.begin(115200);
     
-    // Initialize radio at 433 MHz
-    radio.begin(433000000L, 8, 4, 7);
+    // Initialize radio at 868 MHz
+    radio.begin(868000000L, 8, 4, 7);
     
     // Set modulation to OOK
     radio.setModulation(SX1276_MODULATION_OOK);
@@ -221,6 +218,9 @@ void loop() {
 ```
 
 See the [OOKExample](examples/OOKExample/OOKExample.ino) for a complete OOK example.
+
+> **Note:** In Europe, OOK is typically used in the 433 MHz ISM band.
+> The examples use 868 MHz because suitable 433 MHz test hardware was not available.
 
 ## API Reference
 
@@ -255,10 +255,11 @@ Transmit data packet (blocking).
 - Returns: `SX1276_ERR_NONE` on success, error code otherwise
 
 ```cpp
-int16_t receive(uint8_t* data, size_t maxLen);
+int16_t receive(uint8_t* data, size_t maxLen, uint32_t timeout_ms = 10000);
 ```
 
-Receive data packet (blocking, 10 second timeout).
+Receive data packet (blocking).
+- `timeout_ms`: Maximum wait time in milliseconds (default: 10 000)
 - Returns: Number of bytes received, or error code (< 0)
 
 ### Configuration (LoRa Mode)
