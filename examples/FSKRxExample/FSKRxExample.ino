@@ -47,9 +47,14 @@
 #define RADIO_RST   4
 #define RADIO_DIO0  7
 #pragma message "FSKRxExample: using Adafruit Feather 32u4 RFM95 pins (CS=8, RST=4, DIO0=7)"
+#elif defined(ARDUINO_TTGO_LoRa32_v21new)
+// ESP32-based boards (Lilygo T3 LoRa32, TTGO LoRa32, etc.)
+// The board package defines LORA_CS / LORA_RST / LORA_IRQ.
+#define RADIO_CS    LORA_CS
+#define RADIO_RST   LORA_RST
+#define RADIO_DIO0  LORA_IRQ
 #else
-#error "FSKRxExample is targeted at the Adafruit Feather 32u4 RFM95. " \
-       "Define RADIO_CS / RADIO_RST / RADIO_DIO0 for other boards and remove this error."
+#error "Define RADIO_CS / RADIO_RST / RADIO_DIO0 for other boards and remove this error."
 #endif
 
 // ---------------------------------------------------------------------------
