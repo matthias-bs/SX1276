@@ -1,13 +1,23 @@
 /*
  * RadioLibCompatible.ino
  * 
- * Example demonstrating RadioLib-compatible API usage
- * This shows how to migrate from RadioLib with minimal code changes
+ * Example demonstrating RadioLib-compatible API usage.
+ * This shows how to migrate from RadioLib with minimal code changes.
  * 
- * RadioLib equivalent:
- * Module mod(8, 7, 4);
- * SX1276 radio(&mod);
- * radio.begin(915.0, 125.0, 9, 7, 0x12, 10, 8, 0);
+ * Interop partner: extras/interop_tests/SX127x_PingPong/SX127x_PingPong.ino (RadioLib)
+ * 
+ * Configuration (RadioLib defaults):
+ *   Frequency     : 868 MHz
+ *   Spreading fac.: SF9
+ *   Bandwidth     : 125 kHz
+ *   Coding rate   : 4/7
+ *   Sync word     : 0x12
+ *   CRC           : on
+ *   Preamble      : 8 symbols
+ * 
+ * EU compliance note: 868 MHz g1 sub-band (868.0–868.6 MHz) permits
+ * max 25 mW ERP with a 1% duty cycle (ETSI EN 300 220).  This sketch
+ * enforces a minimum TX interval (TX_MIN_INTERVAL_MS) to stay below 1%.
  */
 
 #include <Arduino.h>
@@ -22,8 +32,17 @@
 #define LORA_IRQ   7   // DIO0 interrupt
 #define LORA_RST   4   // Reset
 
+#define LORA_FREQ 868.0F
+
 // Create SX1276 instance with RadioLib-compatible constructor
 SX1276 radio(LORA_CS, LORA_IRQ, LORA_RST);
+
+// EU 868 MHz g1 sub-band duty cycle enforcement.
+// At SF9 / BW 125 kHz a ~20-byte LoRa packet takes ~226 ms airtime.
+// 1% duty cycle  =>  min interval >= airtime / 0.01 ≈ 22.6 s.
+// We use 25 s to leave headroom.
+static const unsigned long TX_MIN_INTERVAL_MS = 25000;
+static unsigned long lastTxMs = 0;
 
 void setup() {
   Serial.begin(115200);
@@ -37,12 +56,11 @@ void setup() {
   // RadioLib-compatible begin() with defaults
   // begin(freq, bw, sf, cr, syncWord, power, preambleLength, gain)
   // All parameters after freq are optional with sensible defaults
-  int16_t state = radio.begin(915.0);  // Just frequency in MHz
-  
+  int16_t state = radio.begin(LORA_FREQ);  // Just frequency in MHz
   // Or with full parameters like RadioLib:
-  // int16_t state = radio.begin(915.0, 125.0, 9, 7, 0x12, 10, 8, 0);
+  // int16_t state = radio.begin(LORA_FREQ, 125.0, 9, 7, 0x12, 10, 8, 0);
   // Parameters:
-  //   freq = 915.0 MHz
+  //   freq = 868.0/915.0 MHz
   //   bw = 125.0 kHz bandwidth
   //   sf = 9 spreading factor
   //   cr = 7 coding rate (4/7)
@@ -54,7 +72,7 @@ void setup() {
   if (state == SX1276_ERR_NONE) {
     Serial.println(F("Radio initialized successfully!"));
     Serial.println(F("Configuration:"));
-    Serial.println(F("  Frequency: 915.0 MHz"));
+    Serial.print(F("  Frequency: ")); Serial.print(LORA_FREQ);Serial.println(" MHz");
     Serial.println(F("  Bandwidth: 125.0 kHz"));
     Serial.println(F("  Spreading Factor: 9"));
     Serial.println(F("  Coding Rate: 4/7"));
@@ -74,33 +92,39 @@ void setup() {
 }
 
 void loop() {
+  // enforce EU 868 MHz 1% duty cycle before next TX
+  unsigned long elapsed = millis() - lastTxMs;
+  if (elapsed < TX_MIN_INTERVAL_MS) {
+    delay(TX_MIN_INTERVAL_MS - elapsed);
+  }
+
   // Prepare message
   static uint32_t counter = 0;
   char message[50];
   snprintf(message, sizeof(message), "RadioLib-style #%lu", counter++);
-  
+
   Serial.print(F("Transmitting: "));
   Serial.println(message);
-  
+
   // Transmit the message
-  // Note: RadioLib uses String, we use byte array for efficiency
+  lastTxMs = millis();
   int16_t state = radio.transmit((uint8_t*)message, strlen(message));
-  
+
   if (state == SX1276_ERR_NONE) {
     Serial.println(F("Transmission successful!"));
   } else {
     Serial.print(F("Transmission failed, error code: "));
     Serial.println(state);
   }
-  
-  delay(5000);
-  
-  // Optional: Try to receive
+
+  // Listen for the PingPong peer's response.
+  // The peer enforces its own duty cycle, so the response may be delayed
+  // up to TX_MIN_INTERVAL_MS; use a matching timeout.
   Serial.println(F("Listening for packets..."));
-  
+
   uint8_t buffer[255];
-  state = radio.receive(buffer, sizeof(buffer));
-  
+  state = radio.receive(buffer, sizeof(buffer), TX_MIN_INTERVAL_MS);
+
   if (state > 0) {
     // Received a packet
     Serial.print(F("Received: "));
@@ -108,11 +132,11 @@ void loop() {
       Serial.write(buffer[i]);
     }
     Serial.println();
-    
+
     // Get signal quality (RadioLib-compatible methods)
     int16_t rssi = radio.getRSSI();
     int8_t snr = radio.getSNR();
-    
+
     Serial.print(F("RSSI: "));
     Serial.print(rssi);
     Serial.print(F(" dBm, SNR: "));
@@ -121,6 +145,6 @@ void loop() {
   } else if (state == SX1276_ERR_RX_TIMEOUT) {
     Serial.println(F("No packet received"));
   }
-  
+
   Serial.println();
 }

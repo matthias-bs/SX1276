@@ -56,7 +56,7 @@ void setup() {
     Serial.begin(115200);
     
     // Initialize: freq in Hz, then pins
-    int16_t state = radio.begin(915000000L, 8, 4, 7);  // freq, cs, rst, dio0
+    int16_t state = radio.begin(868000000L, 8, 4, 7);  // freq, cs, rst, dio0
     
     if (state == SX1276_ERR_NONE) {
         Serial.println("Radio initialized!");
@@ -87,9 +87,9 @@ void setup() {
     Serial.begin(115200);
     
     // RadioLib-style begin with MHz and optional parameters
-    int16_t state = radio.begin(915.0);  // Frequency in MHz
+    int16_t state = radio.begin(868.0);  // Frequency in MHz
     // Or with full parameters:
-    // state = radio.begin(915.0, 125.0, 9, 7, 0x12, 10, 8, 0);
+    // state = radio.begin(868.0, 125.0, 9, 7, 0x12, 10, 8, 0);
     
     if (state == SX1276_ERR_NONE) {
         Serial.println("Radio initialized!");
@@ -108,7 +108,6 @@ See the [BasicExample](examples/BasicExample/BasicExample.ino) for simplified AP
 ### Complete Example (Simplified API)
 
 ```cpp
-#define LORA_ENABLED  // Enable LoRa modulation
 #include <SX1276.h>
 
 // Pin definitions for Adafruit Feather 32u4 RFM95
@@ -121,8 +120,8 @@ SX1276 radio;
 void setup() {
     Serial.begin(115200);
     
-    // Initialize radio at 915 MHz
-    int16_t state = radio.begin(915000000L, LORA_CS, LORA_RST, LORA_DIO0);
+    // Initialize radio at 868 MHz
+    int16_t state = radio.begin(868000000L, LORA_CS, LORA_RST, LORA_DIO0);
     
     if (state == SX1276_ERR_NONE) {
         Serial.println("Radio initialized!");
@@ -155,7 +154,6 @@ See the [BasicExample](examples/BasicExample/BasicExample.ino) for a complete Lo
 ### FSK Example
 
 ```cpp
-#define FSK_OOK_ENABLED  // Enable FSK/OOK modulation
 #include <SX1276.h>
 
 SX1276 radio;
@@ -163,8 +161,8 @@ SX1276 radio;
 void setup() {
     Serial.begin(115200);
     
-    // Initialize radio at 915 MHz
-    radio.begin(915000000L, 8, 4, 7);
+    // Initialize radio at 868 MHz
+    radio.begin(868000000L, 8, 4, 7);
     
     // Set modulation to FSK
     radio.setModulation(SX1276_MODULATION_FSK);
@@ -190,7 +188,6 @@ See the [FSKExample](examples/FSKExample/FSKExample.ino) for a complete FSK exam
 ### OOK Example
 
 ```cpp
-#define FSK_OOK_ENABLED  // Enable FSK/OOK modulation
 #include <SX1276.h>
 
 SX1276 radio;
@@ -198,8 +195,8 @@ SX1276 radio;
 void setup() {
     Serial.begin(115200);
     
-    // Initialize radio at 433 MHz
-    radio.begin(433000000L, 8, 4, 7);
+    // Initialize radio at 868 MHz
+    radio.begin(868000000L, 8, 4, 7);
     
     // Set modulation to OOK
     radio.setModulation(SX1276_MODULATION_OOK);
@@ -221,6 +218,10 @@ void loop() {
 ```
 
 See the [OOKExample](examples/OOKExample/OOKExample.ino) for a complete OOK example.
+
+
+> **Note:**
+> Typically OOK would be used with 433 MHz in the EU. The OOK example uses 868 MHz because suitable 433 MHz test hardware was not available.
 
 ## API Reference
 
@@ -255,10 +256,11 @@ Transmit data packet (blocking).
 - Returns: `SX1276_ERR_NONE` on success, error code otherwise
 
 ```cpp
-int16_t receive(uint8_t* data, size_t maxLen);
+int16_t receive(uint8_t* data, size_t maxLen, uint32_t timeout_ms = 10000);
 ```
 
-Receive data packet (blocking, 10 second timeout).
+Receive data packet (blocking).
+- `timeout_ms`: Maximum wait time in milliseconds (default: 10 000)
 - Returns: Number of bytes received, or error code (< 0)
 
 ### Configuration (LoRa Mode)
@@ -348,6 +350,68 @@ This library is specifically designed for memory-constrained devices:
   - Define `FSK_OOK_ENABLED` to enable FSK/OOK modulation
   - Define both to enable all modes with runtime switching
 - **Debug macros**: Debug output compiled out when not needed
+
+## Regulatory Compliance — Duty Cycle
+
+
+> **⚠️ Warning:** Transmitting on ISM/SRD bands is subject to local radio regulations.
+> - The **868.0–868.6 MHz** g1 sub-band (EU SRD) limits **all modulation types** (LoRa, FSK, OOK) to **1% duty cycle** and **25 mW ERP** (ETSI EN 300 220).
+> - The **433.05–434.79 MHz** ISM band (EU) is typically used for OOK and allows up to **10% duty cycle** and **10 mW ERP** (but always check local regulations).
+> - Other sub-bands and regions have different limits.
+
+When writing your own sketch, you **must** ensure the time-on-air of each transmission
+divided by the TX interval stays below the applicable duty cycle limit. The formula is:
+
+$$\text{duty cycle} = \frac{T_{\text{air}}}{T_{\text{interval}}} \leq 0.01 \quad (1\,\%)$$
+
+Factors that affect airtime: spreading factor (LoRa), bit rate (FSK/OOK), preamble length,
+payload size, and coding rate.
+
+All examples in this library enforce the 1 % limit via a `TX_MIN_INTERVAL_MS` guard.
+See any example sketch (e.g. [BasicExample](examples/BasicExample/BasicExample.ino)) for
+the pattern.
+
+### Bidirectional Nodes — Synchronization
+
+Bidirectional sketches (e.g. [FSKExample](examples/FSKExample/FSKExample.ino),
+[RadioLibCompatible](examples/RadioLibCompatible/RadioLibCompatible.ino)) that both
+transmit **and** receive face a synchronization challenge: each node alternates between
+TX and RX windows, and the duty cycle enforcement delay increases the total cycle time.
+If both nodes happen to transmit at the same moment, a collision occurs; if they listen
+at the same moment, neither sends.
+
+Mitigations used in the examples:
+
+- **RX timeout ≥ peer's worst-case TX cycle** — ensures at least one peer transmission
+  falls inside each listen window.
+- **Jittered timing** — `randomSeed(micros())` plus randomized delays decorrelate the
+  two nodes so they gradually drift out of phase-lock.
+- **Probabilistic beaconing** — on RX timeout, transmit with < 100 % probability to
+  break symmetric deadlocks.
+
+Even so, the first few exchanges after power-on may experience timeouts until the nodes
+de-synchronize. This is expected behaviour and not a fault.
+
+### Avoiding Synchronization Issues in Production
+
+For real applications, prefer **asymmetric roles** over symmetric ping-pong:
+
+| Approach | Description | Complexity |
+|----------|------------|------------|
+| **Initiator / Responder** | One node (primary) always initiates; the other (secondary) stays in continuous RX and only transmits a short reply after being polled. No timing conflict — exactly one transmitter at a time. This is how LoRaWAN Class A works. | Low |
+| **Listen-Before-Talk (LBT)** | Check RSSI before transmitting; back off if the channel is busy. Avoids collisions but does not break the "both listening" deadlock alone — still needs one side to initiate. | Medium |
+| **TDMA** | Assign fixed time slots to each node. Requires synchronized clocks (GPS, NTP, or a coordinator beacon). Scales to many nodes but is overkill for two. | High |
+| **Slotted ALOHA + Backoff** | Transmit at random times; on collision (no ACK), wait a random, exponentially increasing delay before retrying. Simple, no roles, but lower throughput. | Medium |
+
+**Recommendation:** Use the **Initiator / Responder** pattern. The primary transmits,
+then opens a short RX window for the reply; the secondary stays in continuous RX.
+This eliminates synchronization problems entirely and is inherently duty-cycle-friendly
+because the responder only transmits briefly after being polled.
+
+The existing `TransmitExample` + `ReceiveExample` pair already demonstrates one-way
+Initiator / Responder communication. For bidirectional data exchange, extend the primary
+to listen for a reply immediately after its transmission (similar to LoRaWAN Class A RX
+windows).
 
 ## Compatibility
 

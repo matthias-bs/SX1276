@@ -575,8 +575,28 @@ int16_t SX1276::transmit(const uint8_t* data, size_t len) {
 #ifdef FSK_OOK_ENABLED
     if (_modulation == SX1276_MODULATION_FSK || _modulation == SX1276_MODULATION_OOK) {
         // FSK/OOK mode transmit
-        // Set payload length register (used for both fixed and variable modes)
-        writeRegister(SX1276_REG_PAYLOAD_LENGTH_FSK, len);
+        // In variable-length mode, REG_PAYLOAD_LENGTH_FSK is the maximum accepted
+        // payload length (RX guard only). The actual TX length is determined by the
+        // length byte written to the FIFO below. Do NOT overwrite this register here,
+        // as doing so would corrupt the previously configured maximum payload length
+        // (SX1276_MAX_PACKET_LENGTH = 0xFF), causing the receiver side to discard
+        // any subsequently received packet whose length byte exceeds strlen(message).
+        //
+        // BUG NOTE (fixed): the original line
+        //   writeRegister(SX1276_REG_PAYLOAD_LENGTH_FSK, len);
+        // set the maximum accepted payload to strlen(message) before each TX.
+        // This caused the next receive() call to reject any incoming packet longer
+        // than the just-transmitted message, which could silently drop valid packets.
+        
+        // Clear IRQ flags and FIFO before writing new TX data.
+        // Writing FIFO_OVERRUN (bit 4) to IRQ_FLAGS_2 resets the FIFO, discarding
+        // any residual bytes left over from a previous aborted reception.
+        // Without this, leftover RX bytes would be prepended to the TX frame,
+        // corrupting the packet (the first residual byte would be mis-interpreted
+        // as the length byte in variable-length mode).
+        // Matches RadioLib's clearIrqFlags(FLAGS_ALL) in stageMode(TX).
+        writeRegister(SX1276_REG_IRQ_FLAGS_1, 0xFF);
+        writeRegister(SX1276_REG_IRQ_FLAGS_2, 0xFF);
         
         // Write data to FIFO
         spiBegin();
@@ -626,7 +646,7 @@ int16_t SX1276::transmit(const uint8_t* data, size_t len) {
 /**
  * Receive data (blocking)
  */
-int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
+int16_t SX1276::receive(uint8_t* data, size_t maxLen, uint32_t timeout_ms) {
 #ifdef LORA_ENABLED
     if (_modulation == SX1276_MODULATION_LORA) {
         // LoRa mode receive
@@ -651,10 +671,10 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
             return state;
         }
         
-        // Wait for RX done (with timeout)
+        // Wait for RX done (with configurable timeout)
         uint32_t start = millis();
         while (digitalRead(_dio0Pin) == LOW) {
-            if (millis() - start > 10000) {
+            if (millis() - start > timeout_ms) {
                 standby();
                 return SX1276_ERR_RX_TIMEOUT;
             }
@@ -725,16 +745,17 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
             return state;
         }
         
-        // Wait for PayloadReady flag (with timeout)
-        // Double protection: time-based (10s) and iteration-based (prevents infinite loop if millis() fails)
+        // Wait for PayloadReady flag (with configurable timeout)
+        // Double protection: time-based and iteration-based (prevents infinite loop if millis() fails)
         uint32_t start = millis();
         uint32_t iterations = 0;
-        const uint32_t maxIterations = 10000000;  // Safety limit (~10M iterations at ~1us each = ~10s)
+        // maxIterations safety limit: ~1 us per SPI poll iteration on ESP32
+        const uint32_t maxIterations = timeout_ms * 1000UL;
         const uint32_t rssiCheckInterval = 50;  // Check for RSSI every 50 iterations (~50us)
         bool rssiCaptured = false;  // Track if we've captured RSSI
         
         while (!(readRegister(SX1276_REG_IRQ_FLAGS_2) & SX1276_IRQ2_PAYLOAD_READY)) {
-            if (millis() - start > 10000) {
+            if (millis() - start > timeout_ms) {
                 standby();
                 return SX1276_ERR_RX_TIMEOUT;
             }
@@ -758,8 +779,10 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
                     SX1276_DEBUG_PRINT(F(", IRQ1=0x"));
                     SX1276_DEBUG_PRINT(irqFlags1, HEX);
                     SX1276_DEBUG_PRINT(F(", IRQ2=0x"));
+#ifdef SX1276_DEBUG
                     uint8_t irqFlags2 = readRegister(SX1276_REG_IRQ_FLAGS_2);
                     SX1276_DEBUG_PRINTLN(irqFlags2, HEX);
+#endif
                 }
             }
             
@@ -776,8 +799,10 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
             SX1276_DEBUG_PRINT(F("RSSI fallback read: raw=0x"));
             SX1276_DEBUG_PRINT(rawRSSI, HEX);
             SX1276_DEBUG_PRINT(F(", IRQ1=0x"));
+#ifdef SX1276_DEBUG
             uint8_t irqFlags1 = readRegister(SX1276_REG_IRQ_FLAGS_1);
             SX1276_DEBUG_PRINTLN(irqFlags1, HEX);
+#endif
         }
         
         // Check for CRC error (if enabled)
@@ -812,6 +837,18 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
             spiBegin();
             spiTransfer(SX1276_REG_FIFO);
             len = spiTransfer(0x00);  // First byte is length
+
+            // Guard against malformed frames or stale FIFO state.
+            // In variable-length mode, the first byte must be 1..63 for SX127x FIFO.
+            // If len is 0 or larger than the hardware FIFO payload capacity, flush
+            // FIFO/IRQs and treat as timeout so the caller can retry cleanly.
+            if (len == 0 || len >= 64) {
+                spiEnd();
+                writeRegister(SX1276_REG_IRQ_FLAGS_1, 0xFF);
+                writeRegister(SX1276_REG_IRQ_FLAGS_2, 0xFF);  // includes FIFO reset via OVERRUN bit
+                standby();
+                return SX1276_ERR_RX_TIMEOUT;
+            }
             
             if (len > maxLen) {
                 len = maxLen;
@@ -830,7 +867,7 @@ int16_t SX1276::receive(uint8_t* data, size_t maxLen) {
         SX1276_DEBUG_PRINT(F(", first bytes: "));
         for (size_t i = 0; i < (len < 4 ? len : 4); i++) {
             SX1276_DEBUG_PRINT(F("0x"));
-            if (data[i] < 0x10) SX1276_DEBUG_PRINT(F("0"));
+            if (data[i] < 0x10) { SX1276_DEBUG_PRINT(F("0")); }
             SX1276_DEBUG_PRINT(data[i], HEX);
             SX1276_DEBUG_PRINT(F(" "));
         }
@@ -1404,10 +1441,10 @@ int16_t SX1276::configFSK() {
     // Bit 7: RestartRxOnCollision = 0 (off)
     // Bit 6: RestartRxWithoutPLLLock = 0
     // Bit 5: RestartRxWithPLLLock = 0
-    // Bit 4: AfcAutoOn = 0 (off initially, can be enabled if needed)
+    // Bit 4: AfcAutoOn = 1 (AFC enabled)
     // Bit 3: AgcAutoOn = 1 (AGC auto on)
-    // Bits 2-0: AfcAgcTrigger = 001 (RSSI interrupt)
-    writeRegister(SX1276_REG_RX_CONFIG, 0x08 | 0x01);  // AGC auto + RSSI trigger
+    // Bits 2-0: AfcAgcTrigger = 110 (PreambleDetect trigger)
+    writeRegister(SX1276_REG_RX_CONFIG, 0x10 | 0x08 | 0x06);  // AFC+AGC auto, PreambleDetect trigger (0x1E)
     
     // Reset FIFO overrun flag
     writeRegister(SX1276_REG_IRQ_FLAGS_2, SX1276_IRQ2_FIFO_OVERRUN);

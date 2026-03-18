@@ -4,7 +4,7 @@
  * SX1276_Radio_Lite - Lightweight SX1276 radio library for Arduino
  * Simplified port of RadioLib optimized for memory-constrained devices
  * 
- * Copyright (c) 2024 Matthias Prinke
+ * Copyright (c) 2026 Matthias Prinke
  * Licensed under MIT License
  */
 
@@ -348,11 +348,16 @@ public:
     
     /**
      * Receive data (blocking)
-     * @param data Pointer to buffer to store received data
-     * @param maxLen Maximum length of buffer
+     * @param data       Pointer to buffer to store received data
+     * @param maxLen     Maximum length of buffer
+     * @param timeout_ms RX timeout in milliseconds (default 10 000 ms).
+     *                   Pass a shorter value to prevent the node from blocking
+     *                   too long, which is important in ping-pong / interop
+     *                   scenarios where the partner cannot transmit while this
+     *                   node occupies the channel in RX.
      * @return Number of bytes received, or error code (< 0)
      */
-    int16_t receive(uint8_t* data, size_t maxLen);
+    int16_t receive(uint8_t* data, size_t maxLen, uint32_t timeout_ms = 10000);
 
     /**
      * Start non-blocking reception.

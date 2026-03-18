@@ -15,7 +15,7 @@ jobs:
     strategy:
       matrix:
         board:
-          - esp32:esp32:esp32:DebugLevel=debug
+          - esp32:esp32:ttgo-lora32:Revision=TTGO_LoRa32_v21new
           #- esp8266:esp8266:generic:dbg=Serial
           #- rp2040:rp2040:adafruit_feather:dbgport=Serial
           - adafruit:avr:feather32u4
@@ -125,7 +125,7 @@ jobs:
             else
               # build sketch
               echo -e "\n\033[1;33mBuilding ${example##*/} ... \033[0m";
-              arduino-cli compile --libraries /home/runner/work/SX1276 --fqbn ${{ matrix.board }}${{ steps.prep.outputs.options }} $example --warnings=${{ steps.prep.outputs.warnings }}
+              arduino-cli compile --libraries /home/runner/work/SX1276_Radio_Lite/SX1276_Radio_Lite --fqbn ${{ matrix.board }}${{ steps.prep.outputs.options }} $example --warnings=${{ steps.prep.outputs.warnings }}
               if [ $? -ne 0 ]; then
                 echo -e "\033[1;31m${example##*/} build FAILED\033[0m\n";
                 exit 1;

@@ -23,7 +23,8 @@
 #define LORA_DIO0  7
 
 // LoRa frequency (915 MHz for US, 868 MHz for EU)
-#define LORA_FREQ  915000000L
+//#define LORA_FREQ  915000000L
+#define LORA_FREQ    868000000L
 
 // Create SX1276 instance
 SX1276 radio;
