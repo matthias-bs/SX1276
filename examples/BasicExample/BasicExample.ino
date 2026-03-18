@@ -2,28 +2,51 @@
  * BasicExample.ino
  * 
  * Basic example for SX1276_Radio_Lite library
- * Demonstrates LoRa transmission and reception
+ * Demonstrates LoRa transmission and reception (bidirectional)
  * 
- * This example is configured for Adafruit Feather 32u4 RFM95
- * Pins:
- * - CS:  8
- * - RST: 4
- * - DIO0: 7
+ * Interop partners:
+ *   - extras/interop_tests/SX127x_Receive_Interrupt/SX127x_Receive_Interrupt.ino (RadioLib, RX)
+ *   - extras/interop_tests/SX127x_Transmit_Interrupt/SX127x_Transmit_Interrupt.ino (RadioLib, TX)
+ *
+ * Configuration (must match RadioLib interop partners):
+ *   Frequency     : 868 MHz
+ *   Spreading fac.: SF7
+ *   Bandwidth     : 125 kHz
+ *   Coding rate   : 4/5
+ *   Sync word     : 0x12
+ *   CRC           : on
+ *   Preamble      : 8 symbols
  */
 
 #include <Arduino.h>
 
 // Note: LoRa mode is enabled by default in the library
 // (No need to define LORA_ENABLED unless you've disabled it in SX1276.h)
-#include "SX1276.h"
+#include <SX1276.h>
 
-// Pin definitions for Adafruit Feather 32u4 RFM95
-#define LORA_CS    8
-#define LORA_RST   4
-#define LORA_DIO0  7
+// Board-specific pin definitions
+#if defined(ARDUINO_AVR_FEATHER32U4)
+// Adafruit Feather 32u4 RFM95 LoRa 868/915 MHz
+#define RADIO_CS    8
+#define RADIO_RST   4
+#define RADIO_DIO0  7
+#elif defined(ARDUINO_DFROBOT_FIREBEETLE_ESP32)
+#define RADIO_CS      27 // D4
+#define RADIO_RST     25 // D2
+#define RADIO_DIO0    26 // D3
+#elif defined(ARDUINO_TTGO_LoRa32_v21new)
+// ESP32-based boards (Lilygo T3 LoRa32, TTGO LoRa32, etc.)
+#define RADIO_CS    LORA_CS
+#define RADIO_RST   LORA_RST
+#define RADIO_DIO0  LORA_IRQ
+#else
+#if !defined(LORA_CS) || !defined(LORA_RST) || !defined(LORA_IRQ)
+#error "Unsupported board: define RADIO_CS/RADIO_RST/RADIO_DIO0 for this target."
+#endif
+#endif
 
-// LoRa frequency (915 MHz for US, 868 MHz for EU)
-#define LORA_FREQ  915000000L
+// LoRa frequency — 868 MHz SRD band (EU)
+#define LORA_FREQ  868000000L
 
 // Create SX1276 instance
 SX1276 radio;
@@ -38,7 +61,7 @@ void setup() {
   Serial.println(F("Initializing..."));
   
   // Initialize the radio
-  int16_t state = radio.begin(LORA_FREQ, LORA_CS, LORA_RST, LORA_DIO0);
+  int16_t state = radio.begin(LORA_FREQ, RADIO_CS, RADIO_RST, RADIO_DIO0);
   
   if (state == SX1276_ERR_NONE) {
     Serial.println(F("Radio initialized successfully!"));
