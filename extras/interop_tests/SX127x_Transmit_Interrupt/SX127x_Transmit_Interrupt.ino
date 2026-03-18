@@ -54,7 +54,7 @@ void setFlag(void) {
 }
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
 
   // initialize SX1276 with default settings
   Serial.print(F("[SX1276] Initializing ... "));
